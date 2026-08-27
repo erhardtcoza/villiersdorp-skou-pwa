@@ -6,6 +6,10 @@ compatibility_flags = ["nodejs_compat"]
 no_bundle = true
 workers_dev = true
 
+[[rules]]
+type = "ESModule"
+globs = ["**/*.js", "**/*.mjs"]
+
 [[routes]]
 pattern = "app.villiersdorpskou.co.za"
 custom_domain = true
