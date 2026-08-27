@@ -1,0 +1,18 @@
+name = "villiersdorp-skou-app"
+main = "dist/server/index.js"
+account_id = "0ba56c77d4b26cfe73302244e6df2a5d"
+compatibility_date = "2026-05-15"
+compatibility_flags = ["nodejs_compat"]
+no_bundle = true
+workers_dev = true
+
+[[routes]]
+pattern = "app.villiersdorpskou.co.za"
+custom_domain = true
+
+[assets]
+directory = "dist/client"
+binding = "ASSETS"
+
+[observability.logs]
+enabled = true
