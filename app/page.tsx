@@ -20,7 +20,11 @@ type AppTicket = {
   state: string;
   short_code?: string;
   qr_url: string;
+  attendee_first?: string | null;
+  attendee_last?: string | null;
+  family_member_id?: number | null;
 };
+type FamilyMember = { id: number; name: string; relationship?: string | null; date_of_birth?: string | null; email?: string | null; phone?: string | null };
 type AppWallet = {
   id: string;
   name: string;
@@ -75,6 +79,7 @@ const appModules: AppModule[] = [
     detail: "Gesinslede en kaartjiehouers",
     icon: Users,
     roles: ["visitor", "committee"],
+    live: true,
   },
   {
     key: "programme",
@@ -875,35 +880,9 @@ function ModuleSheet({ moduleKey, tickets, wallets, onClose }: { moduleKey: stri
           ×
         </button>
         {moduleKey === "tickets" ? (
-          <>
-            <span className="detail-icon">
-              <Ticket />
-            </span>
-            <p className="eyebrow">My kaartjies</p>
-            <h2>Koop of wys kaartjies</h2>
-            <a className="sheet-primary-link" href="https://tickets.villiersdorpskou.co.za/shop/villiersdorp-skou-2026">
-              Koop kaartjies <ArrowRight />
-            </a>
-            {tickets.length ? (
-              <div className="ticket-list sheet-list">
-                {tickets.map((ticket) => (
-                  <a key={ticket.id} href={ticket.qr_url}>
-                    <Ticket />
-                    <span>
-                      <strong>{ticket.ticket_name}</strong>
-                      <small>
-                        {ticket.event_name}
-                        {ticket.short_code ? ` · ${ticket.short_code}` : ""}
-                      </small>
-                    </span>
-                    <b>{ticket.state === "unused" ? "Gereed" : ticket.state}</b>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <EmptyState icon={<Ticket />} title="Geen kaartjies gevind nie" text="Nuwe aankope wat by jou bevestigde e-pos en selfoon pas, verskyn outomaties hier." />
-            )}
-          </>
+          <TicketsFlow tickets={tickets} />
+        ) : moduleKey === "family" ? (
+          <FamilyFlow />
         ) : moduleKey === "wallet" ? (
           <>
             <span className="detail-icon">
@@ -950,6 +929,117 @@ function ModuleSheet({ moduleKey, tickets, wallets, onClose }: { moduleKey: stri
         )}
       </section>
     </div>
+  );
+}
+
+function TicketsFlow({ tickets }: { tickets: AppTicket[] }) {
+  const [family, setFamily] = useState<FamilyMember[]>([]);
+  const [assigning, setAssigning] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    void api("/api/app/family")
+      .then((result) => setFamily(result.family || []))
+      .catch(() => setFamily([]));
+  }, []);
+  const assign = async (ticketId: number, familyMemberId: string) => {
+    setAssigning(ticketId);
+    setError("");
+    try {
+      await api(`/api/app/tickets/${ticketId}/assign`, { method: "POST", body: JSON.stringify({ family_member_id: familyMemberId ? Number(familyMemberId) : null }) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kaartjie-toewysing het misluk");
+    } finally {
+      setAssigning(null);
+    }
+  };
+  return (
+    <>
+      <span className="detail-icon"><Ticket /></span>
+      <p className="eyebrow">My kaartjies</p>
+      <h2>Koop of wys kaartjies</h2>
+      <a className="sheet-primary-link" href="https://tickets.villiersdorpskou.co.za/shop/villiersdorp-skou-2026">Koop kaartjies <ArrowRight /></a>
+      {error && <p className="form-error">{error}</p>}
+      {tickets.length ? (
+        <div className="app-ticket-list sheet-list">
+          {tickets.map((ticket) => (
+            <article key={ticket.id} className="app-ticket-card">
+              <a href={ticket.qr_url} className="app-ticket-main">
+                <Ticket />
+                <span><strong>{ticket.ticket_name}</strong><small>{ticket.event_name}{ticket.short_code ? ` · ${ticket.short_code}` : ""}</small></span>
+                <b>{ticket.state === "unused" ? "Gereed" : ticket.state}</b>
+              </a>
+              <label>
+                Kaartjiehouer
+                <select defaultValue={ticket.family_member_id || ""} disabled={assigning === ticket.id} onChange={(event) => void assign(ticket.id, event.target.value)}>
+                  <option value="">Ek self</option>
+                  {family.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+                </select>
+              </label>
+            </article>
+          ))}
+        </div>
+      ) : <EmptyState icon={<Ticket />} title="Geen kaartjies gevind nie" text="Nuwe aankope wat by jou bevestigde e-pos en selfoon pas, verskyn outomaties hier." />}
+    </>
+  );
+}
+
+function FamilyFlow() {
+  const [family, setFamily] = useState<FamilyMember[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const load = async () => {
+    try {
+      const result = await api("/api/app/family");
+      setFamily(result.family || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ons kon nie jou familielede laai nie");
+    }
+  };
+  useEffect(() => {
+    let active = true;
+    void api("/api/app/family")
+      .then((result) => { if (active) setFamily(result.family || []); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Ons kon nie jou familielede laai nie"); });
+    return () => { active = false; };
+  }, []);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/api/app/family", { method: "POST", body: JSON.stringify({ name: form.get("name"), relationship: form.get("relationship"), date_of_birth: form.get("date_of_birth"), email: form.get("email"), phone: form.get("phone") }) });
+      setAdding(false);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ons kon nie die familielid byvoeg nie");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <span className="detail-icon"><Users /></span>
+      <p className="eyebrow">My familie</p>
+      <h2>Gesin en kaartjiehouers</h2>
+      <p className="family-intro">Voeg die mense by vir wie jy kaartjies bestuur. Jy kan daarna elke kaartjie aan die regte persoon toewys.</p>
+      {error && <p className="form-error">{error}</p>}
+      {family === null ? <p className="loading-line"><RefreshCw className="spin" /> Laai familielede…</p> : family.length ? (
+        <div className="family-list">{family.map((member) => <article key={member.id}><span className="family-avatar">{member.name.charAt(0)}</span><div><strong>{member.name}</strong><small>{member.relationship || "Familielid"}{member.date_of_birth ? ` · ${member.date_of_birth}` : ""}</small></div></article>)}</div>
+      ) : <EmptyState icon={<Users />} title="Nog geen familielede nie" text="Voeg ’n familielid by om kaartjies namens hulle te bestuur." />}
+      {adding ? (
+        <form className="family-form" onSubmit={submit}>
+          <label>Volle naam<input name="name" required minLength={2} /></label>
+          <label>Verwantskap<input name="relationship" placeholder="bv. Kind, eggenoot" /></label>
+          <label>Geboortedatum<input name="date_of_birth" type="date" /></label>
+          <label>E-pos (opsioneel)<input name="email" type="email" /></label>
+          <label>Selfoon (opsioneel)<input name="phone" inputMode="tel" /></label>
+          <button className="app-primary" disabled={busy}>{busy ? <RefreshCw className="spin" /> : <UserPlus />}{busy ? "Stoor…" : "Stoor familielid"}</button>
+          <button type="button" className="text-button" onClick={() => setAdding(false)}>Kanselleer</button>
+        </form>
+      ) : <button className="sheet-primary-link family-add" onClick={() => setAdding(true)}><UserPlus /> Voeg familielid by</button>}
+    </>
   );
 }
 
