@@ -1,0 +1,2 @@
+import type { MetadataRoute } from "next";
+export default function manifest():MetadataRoute.Manifest{return {name:"Villiersdorp Skou",short_name:"Skou",description:"Villiersdorp Skou access, tickets, communication and event tools.",start_url:"/",display:"standalone",background_color:"#fffaf0",theme_color:"#0f4b2b",orientation:"portrait",icons:[{src:"/skou-app-icon.png",sizes:"512x512",type:"image/png",purpose:"any"}]}}
