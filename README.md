@@ -6,9 +6,10 @@ The PWA is the test and implementation shell for visitor, vendor, staff and comm
 
 ## Current preview
 
-- Hosted preview: <https://villiersdorp-skou-pwa.erhardte.chatgpt.site>
+- Live PWA: <https://app.villiersdorpskou.co.za>
+- Original visual prototype: <https://villiersdorp-skou-pwa.erhardte.chatgpt.site>
 - Event: Villiersdorp Skou, 23–24 October 2026
-- Status: functional front-end prototype with device-local demo data
+- Status: live authentication and role shell with connected tickets, family records and wallets; remaining prototype modules are being connected incrementally
 
 ## Product structure
 
@@ -50,12 +51,18 @@ Staff permissions currently cover:
 
 See [PROGRESS_REPORT.md](PROGRESS_REPORT.md) for the complete implementation status.
 
-## What is not live yet
+## Live system integration
 
-The repository intentionally uses sample data and `localStorage` for prototype workflows. The following require backend integration before production use:
+The production PWA now uses the existing Skou Worker as its system of record for:
 
-- Authentication and server-enforced permissions
-- Real orders, ticket ownership and secure QR tokens
+- Visitor registration, email verification, login and password reset
+- Existing staff identities and server-enforced roles
+- Automatic ticket and wallet matching by verified contact details
+- Family records and ticket-holder assignment
+- Ticket purchase and secure QR hand-off
+
+The remaining prototype workflows require backend integration before production use:
+
 - Ticket transfer, WhatsApp delivery and Apple/Google Wallet passes
 - Yoco payments, refunds and webhooks
 - Shared Bar Wallet financial ledger
@@ -111,6 +118,7 @@ npm run lint
 | `public/skou-app-icon.png` | App icon |
 | `docs/INTEGRATION.md` | Existing-system integration guide |
 | `PROGRESS_REPORT.md` | Current progress and remaining work |
+| `mobile/` | Shared Expo SDK 57 codebase for the iOS and Android apps |
 
 ## Integration approach
 
@@ -150,20 +158,19 @@ The exact endpoint contracts and migration checklist are in [docs/INTEGRATION.md
 - Record every approval, scan, refund, reversal and permission change.
 - Treat age entered by a user as profile information, not alcohol-sale proof.
 
-## PWA to native app
+## PWA and native apps
 
-The PWA validates layouts, workflows and API contracts first. A later React Native/Expo app can reuse:
+The `mobile/` Expo project already reuses:
 
-- Screen structure and user journeys
-- Brand tokens and assets
-- TypeScript domain types
-- API contracts
-- Permission rules
-- Copy and validation logic
+- The branded splash, authentication and role-based home experience
+- Native bearer sessions stored with Expo SecureStore
+- Live tickets, wallets and family records
+- The complete password-reset flow
+- Committee role-preview navigation
+- The same production API and permission rules as the PWA
 
-Native-only features such as simultaneous QR camera scanning and NFC can follow after the PWA workflows are stable.
+Native-only QR camera, NFC, push-notification and offline scanning features follow after the shared live workflows are stable. Store builds still require the final Apple bundle identifier, Android application ID, signing credentials and store accounts.
 
 ## Repository policy
 
 Never commit secrets, production exports, customer information or payment data. Use environment variables for local development and managed runtime secrets in production.
-
