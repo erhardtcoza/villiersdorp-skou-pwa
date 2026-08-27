@@ -4,9 +4,9 @@ Updated: 27 August 2026
 
 ## Executive status
 
-The PWA now provides a coherent mobile interface for the main Villiersdorp Skou user groups. It is suitable for stakeholder testing and backend integration planning.
+The live PWA now uses the existing Skou authentication, roles, verified account linkage, family records, issued tickets and wallet records. Visitors can buy tickets and start secure Yoco wallet top-ups inside the app. More specialised vendor, staff and committee modules are still being integrated from the prototype.
 
-The front end is not yet a production transaction system. Most complex modules save prototype changes on the current device. Live operation requires authentication, API integration, database persistence, notifications and operational testing.
+Wallet funds are credited only after a signed Yoco webhook confirms the exact payment. A low-value real Yoco wallet top-up and ticket purchase still require user-led end-to-end confirmation before the flow is treated as operationally signed off.
 
 ## Delivery status
 
@@ -16,13 +16,14 @@ The front end is not yet a production transaction system. Most complex modules s
 | Role-based menus | Implemented | Replace test role switcher with authenticated role claims |
 | Committee super admin | Implemented in UI | Enforce on every API endpoint |
 | Staff permissions | Functional prototype | Load grants from backend and audit changes |
-| Family management | Functional prototype | Connect user/family tables and invitations |
-| Ticket assignment | Functional prototype | Connect existing order and holder records |
-| Ticket display | Functional demo | Issue secure real QR tokens and scan status |
+| Family management | Live account records | Add invitations and transfer acceptance |
+| Ticket assignment | Live existing ticket records | Add invitation-based transfers |
+| Ticket display | Live issued QR tickets | Complete physical gate-device testing |
+| Ticket purchase | Live Yoco checkout | Confirm one low-value real purchase and reconciliation |
 | Programme | Functional prototype | Load event programme API and push reminders |
 | Show map | Functional prototype | Import official mapped polygons and coordinates |
 | Phone location | Demonstrated | Calibrate GPS-to-map positioning on the grounds |
-| Bar Wallet | Functional simulation | Build ledger, Yoco flows, limits and reconciliation |
+| Bar Wallet | Live linked balance and Yoco top-up | Confirm one low-value real top-up and reconciliation |
 | Venue booking | Functional prototype | Connect availability, estimates and reservations |
 | Venue approvals | Functional prototype | Persist decisions, price, conditions and audit trail |
 | Staff POS | Functional simulation | Connect products, tills, orders, payments and cash-up |
@@ -39,6 +40,10 @@ The front end is not yet a production transaction system. Most complex modules s
 
 ### Visitors
 
+- Register, verify, sign in and reset a forgotten password
+- Automatically link existing paid tickets and wallets by the verified email/phone pair
+- Buy current Skou tickets in-app and continue through Yoco hosted checkout
+- Top up a linked wallet through Yoco without crediting the balance before webhook confirmation
 - Manage a five-person family ticket bundle
 - Add family members and record dates of birth
 - Assign ticket holders and demonstrate invitations
@@ -167,4 +172,3 @@ Authenticated users can:
 - Record every privileged action in an audit trail
 
 Bar Wallet, NFC and open public social features should activate only after separate security and operational testing.
-

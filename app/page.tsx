@@ -31,6 +31,16 @@ type AppWallet = {
   balance_cents: number;
   status: string;
 };
+type TicketType = {
+  id: number;
+  name: string;
+  price_cents: number;
+  capacity: number;
+  per_order_limit: number;
+  requires_gender: number;
+  requires_name: number;
+};
+type TicketEvent = { id: number; name: string; sales_closed: number };
 type MeResponse = {
   ok: boolean;
   user: AppUser;
@@ -274,6 +284,35 @@ export default function HomePage() {
       clearTimeout(timer);
       void boot;
     };
+  }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const topupId = params.get("topup");
+    const payment = params.get("payment");
+    if (!topupId || !payment) return;
+    if (payment === "cancelled") {
+      queueMicrotask(() => setMessage("Die betaling is gekanselleer; jou beursiebalans het nie verander nie."));
+      window.history.replaceState({}, "", "/");
+      return;
+    }
+    let stopped = false;
+    let attempts = 0;
+    const check = async () => {
+      attempts += 1;
+      try {
+        const result = await api(`/api/app/wallet-topups/${encodeURIComponent(topupId)}`);
+        if (result.topup?.status === "paid") {
+          await loadMe();
+          if (!stopped) setMessage(`Betaling ontvang—R ${(Number(result.topup.amount_cents || 0) / 100).toFixed(2)} is by jou beursie gevoeg.`);
+          window.history.replaceState({}, "", "/");
+          return;
+        }
+      } catch {}
+      if (!stopped && attempts < 10) window.setTimeout(check, 1500);
+      else if (!stopped) setMessage("Yoco verwerk nog jou betaling. Jou balans sal outomaties wys sodra dit bevestig is.");
+    };
+    void check();
+    return () => { stopped = true; };
   }, []);
 
   const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
@@ -808,7 +847,7 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
         <NavButton label="Kalender" icon={CalendarDays} active={tab === "calendar"} onClick={() => setTab("calendar")} />
         <NavButton label="Profiel" icon={CircleUserRound} active={tab === "profile"} onClick={() => setTab("profile")} />
       </nav>
-      {selected && <ModuleSheet moduleKey={selected} tickets={tickets} wallets={wallets} onClose={() => setSelected(null)} />}
+      {selected && <ModuleSheet moduleKey={selected} user={user} tickets={tickets} wallets={wallets} onClose={() => setSelected(null)} />}
     </main>
   );
 }
@@ -869,7 +908,7 @@ function InfoRow({ icon: Icon, title, text }: { icon: LucideIcon; title: string;
     </article>
   );
 }
-function ModuleSheet({ moduleKey, tickets, wallets, onClose }: { moduleKey: string; tickets: AppTicket[]; wallets: AppWallet[]; onClose: () => void }) {
+function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey: string; user: AppUser; tickets: AppTicket[]; wallets: AppWallet[]; onClose: () => void }) {
   const moduleInfo = appModules.find((item) => item.key === moduleKey);
   const ModuleIcon = moduleInfo?.icon;
   return (
@@ -880,41 +919,11 @@ function ModuleSheet({ moduleKey, tickets, wallets, onClose }: { moduleKey: stri
           ×
         </button>
         {moduleKey === "tickets" ? (
-          <TicketsFlow tickets={tickets} />
+          <TicketsFlow user={user} tickets={tickets} />
         ) : moduleKey === "family" ? (
           <FamilyFlow />
         ) : moduleKey === "wallet" ? (
-          <>
-            <span className="detail-icon">
-              <WalletCards />
-            </span>
-            <p className="eyebrow">My beursie</p>
-            <h2>Skoubeursie</h2>
-            {wallets.length ? (
-              <div className="wallet-list sheet-list">
-                {wallets.map((wallet) => (
-                  <a className="wallet-link" key={wallet.id} href={`https://tickets.villiersdorpskou.co.za/w/${encodeURIComponent(wallet.id)}`}>
-                    <WalletCards />
-                    <div>
-                      <small>{wallet.name}</small>
-                      <strong>R {(wallet.balance_cents / 100).toFixed(2)}</strong>
-                    </div>
-                    <span>Maak oop</span>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <EmptyState icon={<WalletCards />} title="Geen beursie gekoppel nie" text="’n Beursie met dieselfde bevestigde selfoonnommer sal outomaties hier verskyn." />
-            )}
-            <div className="secure-topup-note">
-              <ShieldCheck />
-              <p>
-                <strong>Veilige aanlyn aanvulling</strong>
-                <br />
-                Yoco-aanvulling word gekoppel sodat jou balans eers verander nadat betaling bevestig is.
-              </p>
-            </div>
-          </>
+          <WalletFlow wallets={wallets} />
         ) : (
           <>
             <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
@@ -932,9 +941,10 @@ function ModuleSheet({ moduleKey, tickets, wallets, onClose }: { moduleKey: stri
   );
 }
 
-function TicketsFlow({ tickets }: { tickets: AppTicket[] }) {
+function TicketsFlow({ user, tickets }: { user: AppUser; tickets: AppTicket[] }) {
   const [family, setFamily] = useState<FamilyMember[]>([]);
   const [assigning, setAssigning] = useState<number | null>(null);
+  const [buying, setBuying] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     void api("/api/app/family")
@@ -957,7 +967,10 @@ function TicketsFlow({ tickets }: { tickets: AppTicket[] }) {
       <span className="detail-icon"><Ticket /></span>
       <p className="eyebrow">My kaartjies</p>
       <h2>Koop of wys kaartjies</h2>
-      <a className="sheet-primary-link" href="https://tickets.villiersdorpskou.co.za/shop/villiersdorp-skou-2026">Koop kaartjies <ArrowRight /></a>
+      <button className="sheet-primary-link sheet-primary-button" onClick={() => setBuying(!buying)}>
+        {buying ? "Terug na my kaartjies" : "Koop kaartjies"} <ArrowRight />
+      </button>
+      {buying && <TicketPurchase user={user} />}
       {error && <p className="form-error">{error}</p>}
       {tickets.length ? (
         <div className="app-ticket-list sheet-list">
@@ -979,6 +992,160 @@ function TicketsFlow({ tickets }: { tickets: AppTicket[] }) {
           ))}
         </div>
       ) : <EmptyState icon={<Ticket />} title="Geen kaartjies gevind nie" text="Nuwe aankope wat by jou bevestigde e-pos en selfoon pas, verskyn outomaties hier." />}
+    </>
+  );
+}
+
+function TicketPurchase({ user }: { user: AppUser }) {
+  const [event, setEvent] = useState<TicketEvent | null>(null);
+  const [types, setTypes] = useState<TicketType[]>([]);
+  const [quantities, setQuantities] = useState<Record<number, number>>({});
+  const [genders, setGenders] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    void api("/api/public/events/villiersdorp-skou-2026")
+      .then((result) => {
+        if (!active) return;
+        setEvent(result.event || null);
+        setTypes(result.ticket_types || []);
+      })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Kaartjies kon nie gelaai word nie"); });
+    return () => { active = false; };
+  }, []);
+  const setQuantity = (type: TicketType, next: number) => {
+    const limit = type.per_order_limit > 0 ? type.per_order_limit : 20;
+    setQuantities((current) => ({ ...current, [type.id]: Math.max(0, Math.min(limit, next)) }));
+  };
+  const total = types.reduce((sum, type) => sum + (quantities[type.id] || 0) * type.price_cents, 0);
+  const count = Object.values(quantities).reduce((sum, quantity) => sum + quantity, 0);
+  const buy = async () => {
+    if (!event || !count) return;
+    if (total <= 0) {
+      setError("Gratis kaartjies moet saam met minstens een betaalde kaartjie gekies word.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const items = types.filter((type) => (quantities[type.id] || 0) > 0).map((type) => ({ ticket_type_id: type.id, qty: quantities[type.id] }));
+      const nameParts = user.name.trim().split(/\s+/);
+      const first = nameParts.shift() || user.name;
+      const last = nameParts.join(" ");
+      const attendees = types.flatMap((type) => Array.from({ length: quantities[type.id] || 0 }, (_, index) => ({
+        ticket_type_id: type.id,
+        attendee_first: first,
+        attendee_last: last,
+        phone: user.phone || "",
+        gender: type.requires_gender ? genders[`${type.id}-${index}`] || "" : "",
+      })));
+      const missingGender = attendees.some((attendee) => types.find((type) => type.id === attendee.ticket_type_id)?.requires_gender && !attendee.gender);
+      if (missingGender) throw new Error("Kies asseblief die vereiste besonderhede vir elke kaartjie");
+      const order = await api("/api/public/orders/create", {
+        method: "POST",
+        body: JSON.stringify({ event_id: event.id, items, attendees, buyer_name: user.name, email: user.email || "", phone: user.phone || "", method: "pay_now" }),
+      });
+      const code = order.order?.short_code;
+      if (!code) throw new Error("Die bestelling kon nie geskep word nie");
+      const payment = await api("/api/payments/yoco/intent", { method: "POST", body: JSON.stringify({ code }) });
+      if (!payment.redirect_url) throw new Error("Yoco-betaling kon nie begin nie");
+      window.location.assign(payment.redirect_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Die kaartjie-aankoop het misluk");
+      setBusy(false);
+    }
+  };
+  if (!event && !error) return <p className="loading-line"><RefreshCw className="spin" /> Laai kaartjies…</p>;
+  return (
+    <section className="purchase-panel">
+      <div className="purchase-heading"><strong>{event?.name || "Villiersdorp Skou 2026"}</strong><span>{count} kaartjie(s)</span></div>
+      {event?.sales_closed ? <p className="form-error">Aanlyn kaartjieverkope is gesluit.</p> : (
+        <div className="ticket-catalogue">
+          {types.map((type) => {
+            const quantity = quantities[type.id] || 0;
+            return (
+              <article key={type.id}>
+                <div><strong>{type.name}</strong><small>R {(type.price_cents / 100).toFixed(2)}</small></div>
+                <div className="quantity-control">
+                  <button type="button" disabled={!quantity} onClick={() => setQuantity(type, quantity - 1)}>−</button>
+                  <b>{quantity}</b>
+                  <button type="button" onClick={() => setQuantity(type, quantity + 1)}>+</button>
+                </div>
+                {type.requires_gender && quantity > 0 && (
+                  <div className="attendee-details">
+                    {Array.from({ length: quantity }, (_, index) => (
+                      <label key={index}>Kaartjie {index + 1}
+                        <select value={genders[`${type.id}-${index}`] || ""} onChange={(e) => setGenders((current) => ({ ...current, [`${type.id}-${index}`]: e.target.value }))}>
+                          <option value="">Kies besonderhede</option><option value="female">Vroulik</option><option value="male">Manlik</option>
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+      {error && <p className="form-error">{error}</p>}
+      <div className="purchase-total"><span>Totaal</span><strong>R {(total / 100).toFixed(2)}</strong></div>
+      <button className="app-primary" disabled={busy || !count || total <= 0 || Boolean(event?.sales_closed)} onClick={() => void buy()}>
+        {busy ? <RefreshCw className="spin" /> : <ShieldCheck />}{busy ? "Gaan na Yoco…" : "Betaal veilig met Yoco"}
+      </button>
+      <small className="payment-note">Jou kaartjies verskyn outomaties in die app nadat Yoco die betaling bevestig het.</small>
+    </section>
+  );
+}
+
+function WalletFlow({ wallets }: { wallets: AppWallet[] }) {
+  const [selectedWallet, setSelectedWallet] = useState(wallets[0]?.id || "");
+  const [amount, setAmount] = useState(10000);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const topup = async () => {
+    if (!selectedWallet) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api(`/api/app/wallets/${encodeURIComponent(selectedWallet)}/topup-intent`, { method: "POST", body: JSON.stringify({ amount_cents: amount }) });
+      if (!result.redirect_url) throw new Error("Yoco-betaling kon nie begin nie");
+      window.location.assign(result.redirect_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Die aanvulling kon nie begin nie");
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <span className="detail-icon"><WalletCards /></span>
+      <p className="eyebrow">My beursie</p>
+      <h2>Skoubeursie</h2>
+      {wallets.length ? (
+        <>
+          <div className="wallet-list sheet-list">
+            {wallets.map((wallet) => (
+              <button className={`wallet-link wallet-select ${selectedWallet === wallet.id ? "selected" : ""}`} key={wallet.id} onClick={() => setSelectedWallet(wallet.id)}>
+                <WalletCards /><div><small>{wallet.name}</small><strong>R {(wallet.balance_cents / 100).toFixed(2)}</strong></div><span>{selectedWallet === wallet.id ? "Gekies" : "Kies"}</span>
+              </button>
+            ))}
+          </div>
+          <section className="topup-panel">
+            <strong>Hoeveel wil jy aanvul?</strong>
+            <div className="amount-options">
+              {[5000, 10000, 20000, 50000].map((value) => <button key={value} className={amount === value ? "active" : ""} onClick={() => setAmount(value)}>R {value / 100}</button>)}
+            </div>
+            <label>Ander bedrag
+              <input type="number" min="10" max="5000" step="10" value={amount / 100} onChange={(event) => setAmount(Math.round(Number(event.target.value || 0) * 100))} />
+            </label>
+            {error && <p className="form-error">{error}</p>}
+            <button className="app-primary" disabled={busy || amount < 1000 || amount > 500000} onClick={() => void topup()}>
+              {busy ? <RefreshCw className="spin" /> : <ShieldCheck />}{busy ? "Gaan na Yoco…" : `Betaal R ${(amount / 100).toFixed(2)} met Yoco`}
+            </button>
+          </section>
+        </>
+      ) : <EmptyState icon={<WalletCards />} title="Geen beursie gekoppel nie" text="’n Beursie met dieselfde bevestigde selfoonnommer sal outomaties hier verskyn." />}
+      <div className="secure-topup-note"><ShieldCheck /><p><strong>Veilige aanlyn aanvulling</strong><br />Jou balans verander eers nadat Yoco die betaling aan die Skou-bediener bevestig het.</p></div>
     </>
   );
 }

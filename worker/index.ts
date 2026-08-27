@@ -29,7 +29,11 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname.startsWith("/api/app/")) {
+    const isAppApi = url.pathname.startsWith("/api/app/");
+    const isTicketCatalogue = url.pathname.startsWith("/api/public/events/") && request.method === "GET";
+    const isTicketOrder = url.pathname === "/api/public/orders/create" && request.method === "POST";
+    const isTicketPayment = url.pathname === "/api/payments/yoco/intent" && request.method === "POST";
+    if (isAppApi || isTicketCatalogue || isTicketOrder || isTicketPayment) {
       const upstream = new URL(url.pathname + url.search, "https://tickets.villiersdorpskou.co.za");
       const headers = new Headers(request.headers);
       headers.set("host", upstream.host);
