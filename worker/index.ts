@@ -29,6 +29,21 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname.startsWith("/api/app/")) {
+      const upstream = new URL(url.pathname + url.search, "https://tickets.villiersdorpskou.co.za");
+      const headers = new Headers(request.headers);
+      headers.set("host", upstream.host);
+      const response = await fetch(new Request(upstream, {
+        method: request.method,
+        headers,
+        body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+        redirect: "manual",
+      }));
+      const proxiedHeaders = new Headers(response.headers);
+      proxiedHeaders.set("cache-control", "no-store");
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers: proxiedHeaders });
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {
