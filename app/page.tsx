@@ -55,6 +55,9 @@ const roleNames: Record<string, string> = {
   scan: "Hekpersoneel",
   staff: "Personeel",
   visitor: "Besoeker",
+  vendor: "Uitstaller",
+  exhibitor: "Uitstaller",
+  uitstaller: "Uitstaller",
 };
 const allViews: RoleView[] = ["visitor", "vendor", "staff", "committee"];
 const appModules: AppModule[] = [
@@ -678,7 +681,7 @@ export default function HomePage() {
 
 function Dashboard({ data, message, onLogout }: { data: MeResponse; message: string; onLogout: () => void }) {
   const { user, tickets, wallets } = data;
-  const actualView: RoleView = user.role === "visitor" ? "visitor" : ["admin", "committee", "manager"].includes(user.role) ? "committee" : "staff";
+  const actualView: RoleView = user.role === "visitor" ? "visitor" : ["vendor", "exhibitor", "uitstaller"].includes(user.role) ? "vendor" : ["admin", "committee", "manager"].includes(user.role) ? "committee" : "staff";
   const [tab, setTab] = useState<AppTab>("home"),
     [preview, setPreview] = useState<RoleView>(actualView),
     [selected, setSelected] = useState<string | null>(null);
