@@ -260,6 +260,199 @@
   color: var(--ink);
   font-weight: 850;
 }
+
+/* Full app pages for ticket sales and venue bookings */
+.app-subpage {
+  min-height: calc(100dvh - 166px);
+  padding-bottom: 24px;
+}
+.subpage-header {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 11px;
+  margin: 0 0 16px;
+  padding: 15px;
+  border-radius: 21px;
+  color: #fff;
+  background: linear-gradient(140deg, #07351d, #145f36);
+  box-shadow: 0 14px 28px #07351d1f;
+}
+.subpage-header > button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #ffffff35;
+  border-radius: 13px;
+  color: #fff;
+  background: #ffffff13;
+}
+.subpage-header > button svg { width: 20px; }
+.subpage-icon {
+  width: 45px;
+  height: 45px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #17331f;
+  background: #d6a72c;
+}
+.subpage-icon svg { width: 22px; }
+.subpage-header p,
+.subpage-header h1 { margin: 0; }
+.subpage-header p {
+  color: #cde4c8;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.subpage-header h1 {
+  margin-top: 3px;
+  font-family: Georgia, serif;
+  font-size: clamp(20px, 5.8vw, 28px);
+  line-height: 1.05;
+}
+.subpage-body { min-width: 0; }
+.ticket-page-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ticket-page-tabs .sheet-primary-link {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #cfc9bb;
+  color: #40534a;
+  background: #fff;
+  font-size: 12px;
+}
+.ticket-page-tabs .sheet-primary-link.active {
+  border-color: #08753e;
+  color: #fff;
+  background: #08753e;
+}
+.ticket-page-tabs + .purchase-panel { margin-top: 0; }
+.venue-page-content { display: grid; gap: 14px; }
+.venue-intro-card {
+  overflow: hidden;
+  position: relative;
+  padding: 20px;
+  border-radius: 22px;
+  color: #fff;
+  background: radial-gradient(circle at 95% 15%, #d6a72c3c, transparent 30%), linear-gradient(145deg, #0d4c2b, #1b6d3f);
+}
+.venue-intro-card::after {
+  content: "";
+  position: absolute;
+  right: -34px;
+  bottom: -46px;
+  width: 145px;
+  height: 145px;
+  border: 1px solid #ffffff16;
+  border-radius: 50%;
+  box-shadow: 0 0 0 20px #ffffff08, 0 0 0 40px #ffffff05;
+}
+.venue-intro-card small { color: #e2c35e; font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+.venue-intro-card h2 { max-width: 390px; margin: 6px 0 8px; font-family: Georgia, serif; font-size: 24px; line-height: 1.08; }
+.venue-intro-card p { max-width: 510px; margin: 0; color: #dbeadd; font-size: 12px; line-height: 1.55; }
+.venue-request-form {
+  display: grid;
+  gap: 12px;
+  padding: 17px;
+  border: 1px solid var(--line);
+  border-radius: 21px;
+  background: #fff;
+}
+.form-section-heading {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.form-section-heading > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: #0f4b2b;
+  font-weight: 900;
+}
+.form-section-heading strong,
+.form-section-heading small { display: block; }
+.form-section-heading strong { font-size: 13px; }
+.form-section-heading small { margin-top: 2px; color: var(--muted); font-size: 10px; }
+.venue-request-form label {
+  display: grid;
+  gap: 6px;
+  color: #40534a;
+  font-size: 11px;
+  font-weight: 850;
+}
+.venue-request-form input,
+.venue-request-form select,
+.venue-request-form textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 45px;
+  padding: 11px 12px;
+  border: 1px solid #d7d2c8;
+  border-radius: 12px;
+  outline: 0;
+  color: var(--ink);
+  background: #fffefb;
+  font: inherit;
+  font-size: 13px;
+}
+.venue-request-form textarea { min-height: 104px; resize: vertical; }
+.venue-request-form input:focus,
+.venue-request-form select:focus,
+.venue-request-form textarea:focus { border-color: #8fbe24; box-shadow: 0 0 0 3px #8fbe2424; }
+.venue-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.venue-request-form .success-note { margin: 0; }
+.venue-disclaimer { color: var(--muted); text-align: center; font-size: 10px; line-height: 1.45; }
+.venue-request-history { display: grid; gap: 9px; }
+.venue-request-history .section-heading { margin: 7px 2px 2px; }
+.venue-request-history > article {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: #fff;
+}
+.venue-request-history article small,
+.venue-request-history article strong,
+.venue-request-history article p { display: block; margin: 0; }
+.venue-request-history article small { color: #8b6816; font-size: 9px; font-weight: 900; }
+.venue-request-history article strong { margin-top: 3px; font-size: 13px; }
+.venue-request-history article p { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.venue-request-history article > span {
+  max-width: 105px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  color: #72530d;
+  background: #f8e9b8;
+  font-size: 9px;
+  font-weight: 900;
+  text-align: center;
+}
+.venue-request-history article > span[data-status="approved"] { color: #246137; background: #e0f1dc; }
+.venue-request-history article > span[data-status="declined"] { color: #962d2d; background: #f7dddd; }
+.venue-request-history article > span[data-status="reviewing"] { color: #205c6e; background: #dcedf1; }
+@media (max-width: 430px) {
+  .subpage-header { grid-template-columns: auto 1fr; }
+  .subpage-icon { display: none; }
+  .venue-form-grid { grid-template-columns: 1fr; }
+  .ticket-page-tabs { position: sticky; z-index: 2; top: 80px; padding: 4px 0; background: var(--paper); }
+}
 .amount-options button.active {
   border-color: #08753e;
   background: #08753e;

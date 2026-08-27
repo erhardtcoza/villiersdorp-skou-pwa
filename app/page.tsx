@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, ArrowRight, Bell, CalendarDays, CheckCircle2, ChevronRight, CircleUserRound, ClipboardCheck, Eye, EyeOff, Home, Images, KeyRound, Landmark, LogIn, LogOut, MapPinned, MessageCircle, QrCode, RefreshCw, ScanLine, ShieldCheck, Store, Ticket, Trophy, UserPlus, Users, WalletCards, type LucideIcon } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, Bell, CalendarDays, CheckCircle2, ChevronRight, CircleUserRound, ClipboardCheck, Eye, EyeOff, Home, Images, KeyRound, Landmark, LogIn, LogOut, MapPinned, MessageCircle, QrCode, RefreshCw, ScanLine, ShieldCheck, Store, Ticket, Trophy, UserPlus, Users, WalletCards, type LucideIcon } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState, type FormEvent } from "react";
 
@@ -50,6 +50,7 @@ type MeResponse = {
 };
 type AuthView = "welcome" | "login" | "register" | "verify" | "forgot" | "reset-code" | "reset-password";
 type AppTab = "home" | "messages" | "calendar" | "profile";
+type AppPage = "home" | "tickets" | "venues";
 type RoleView = "visitor" | "vendor" | "staff" | "committee";
 type AppModule = {
   key: string;
@@ -59,6 +60,18 @@ type AppModule = {
   roles: RoleView[];
   href?: string;
   live?: boolean;
+};
+type VenueRequest = {
+  id: number;
+  event_name: string;
+  event_type: string | null;
+  preferred_date: string;
+  end_date: string | null;
+  expected_guests: number | null;
+  venue_area: string;
+  details: string;
+  status: string;
+  created_at: number;
 };
 
 const roleNames: Record<string, string> = {
@@ -187,6 +200,7 @@ const appModules: AppModule[] = [
     detail: "Gebeurtenisse en besprekingsversoeke",
     icon: Landmark,
     roles: allViews,
+    live: true,
   },
   {
     key: "venue-approvals",
@@ -728,10 +742,33 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
   const actualView: RoleView = user.role === "visitor" ? "visitor" : ["vendor", "exhibitor", "uitstaller"].includes(user.role) ? "vendor" : ["admin", "committee", "manager"].includes(user.role) ? "committee" : "staff";
   const [tab, setTab] = useState<AppTab>("home"),
     [preview, setPreview] = useState<RoleView>(actualView),
-    [selected, setSelected] = useState<string | null>(null);
+    [selected, setSelected] = useState<string | null>(null),
+    [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : "home");
   const walletTotal = wallets.reduce((sum, w) => sum + w.balance_cents, 0),
     visible = appModules.filter((item) => item.roles.includes(preview));
-  const openModule = (item: AppModule) => setSelected(item.key);
+  const pageFromPath = () => window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : "home";
+  const navigatePage = (next: AppPage, replace = false) => {
+    const path = next === "tickets" ? "/kaartjies" : next === "venues" ? "/terreinbesprekings" : "/";
+    window.history[replace ? "replaceState" : "pushState"]({}, "", path);
+    setPage(next);
+    setTab("home");
+    setSelected(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  useEffect(() => {
+    const onPopState = () => setPage(pageFromPath());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+  const openModule = (item: AppModule) => {
+    if (item.key === "tickets") navigatePage("tickets");
+    else if (item.key === "venues") navigatePage("venues");
+    else setSelected(item.key);
+  };
+  const chooseTab = (next: AppTab) => {
+    if (page !== "home") navigatePage("home");
+    setTab(next);
+  };
   return (
     <main className="app-shell live-app-shell">
       <header className="topbar">
@@ -749,7 +786,15 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
         </button>
       </header>
       <section className="viewport">
-        {tab === "home" && (
+        {page === "tickets" ? (
+          <AppSubPage eyebrow="My kaartjies" title="Koop of wys kaartjies" icon={Ticket} onBack={() => navigatePage("home")}>
+            <TicketsFlow user={user} tickets={tickets} standalone />
+          </AppSubPage>
+        ) : page === "venues" ? (
+          <AppSubPage eyebrow="Terreinbesprekings" title="Bespreek die Skouterrein" icon={Landmark} onBack={() => navigatePage("home")}>
+            <VenueBookingPage user={user} />
+          </AppSubPage>
+        ) : tab === "home" && (
           <>
             <article className="welcome-card">
               <Image unoptimized className="hero-crest" src="/skou-crest.png" width={220} height={220} alt="" />
@@ -772,7 +817,7 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
               </p>
             )}
             <div className="live-summary">
-              <button onClick={() => setSelected("tickets")}>
+              <button onClick={() => navigatePage("tickets")}>
                 <Ticket />
                 <span>
                   <strong>{tickets.length}</strong>
@@ -842,10 +887,10 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
         )}
       </section>
       <nav className="bottom-nav" aria-label="Hoofnavigasie">
-        <NavButton label="Home" icon={Home} active={tab === "home"} onClick={() => setTab("home")} />
-        <NavButton label="Boodskappe" icon={MessageCircle} active={tab === "messages"} onClick={() => setTab("messages")} />
-        <NavButton label="Kalender" icon={CalendarDays} active={tab === "calendar"} onClick={() => setTab("calendar")} />
-        <NavButton label="Profiel" icon={CircleUserRound} active={tab === "profile"} onClick={() => setTab("profile")} />
+        <NavButton label="Home" icon={Home} active={page === "home" && tab === "home"} onClick={() => chooseTab("home")} />
+        <NavButton label="Boodskappe" icon={MessageCircle} active={page === "home" && tab === "messages"} onClick={() => chooseTab("messages")} />
+        <NavButton label="Kalender" icon={CalendarDays} active={page === "home" && tab === "calendar"} onClick={() => chooseTab("calendar")} />
+        <NavButton label="Profiel" icon={CircleUserRound} active={page === "home" && tab === "profile"} onClick={() => chooseTab("profile")} />
       </nav>
       {selected && <ModuleSheet moduleKey={selected} user={user} tickets={tickets} wallets={wallets} onClose={() => setSelected(null)} />}
     </main>
@@ -908,6 +953,112 @@ function InfoRow({ icon: Icon, title, text }: { icon: LucideIcon; title: string;
     </article>
   );
 }
+function AppSubPage({ eyebrow, title, icon: Icon, onBack, children }: { eyebrow: string; title: string; icon: LucideIcon; onBack: () => void; children: React.ReactNode }) {
+  return (
+    <section className="app-subpage">
+      <header className="subpage-header">
+        <button onClick={onBack} aria-label="Terug na tuisblad"><ArrowLeft /></button>
+        <span className="subpage-icon"><Icon /></span>
+        <div><p>{eyebrow}</p><h1>{title}</h1></div>
+      </header>
+      <div className="subpage-body">{children}</div>
+    </section>
+  );
+}
+
+function VenueBookingPage({ user }: { user: AppUser }) {
+  const [requests, setRequests] = useState<VenueRequest[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const loadRequests = async () => {
+    try {
+      const result = await api("/api/app/venue-requests");
+      setRequests(result.requests || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Besprekings kon nie gelaai word nie");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    let active = true;
+    void api("/api/app/venue-requests")
+      .then((result) => { if (active) setRequests(result.requests || []); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Besprekings kon nie gelaai word nie"); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/api/app/venue-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          event_name: form.get("event_name"), event_type: form.get("event_type"),
+          preferred_date: form.get("preferred_date"), end_date: form.get("end_date"),
+          expected_guests: form.get("expected_guests"), venue_area: form.get("venue_area"),
+          contact_name: form.get("contact_name"), contact_phone: form.get("contact_phone"), details: form.get("details"),
+        }),
+      });
+      event.currentTarget.reset();
+      setMessage("Dankie. Jou terreinbesprekingsversoek is ontvang en sal deur die Skoukantoor opgevolg word.");
+      await loadRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Die versoek kon nie gestuur word nie");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const statusLabel = (status: string) => status === "approved" ? "Goedgekeur" : status === "declined" ? "Afgekeur" : status === "info_required" ? "Meer inligting nodig" : status === "reviewing" ? "Word hersien" : "Ontvang";
+  return (
+    <div className="venue-page-content">
+      <article className="venue-intro-card">
+        <small>VILLIERSDORP SKOUGRONDE</small>
+        <h2>’n Plek vir jou volgende geleentheid</h2>
+        <p>Stuur jou besonderhede vir beskikbaarheid, ’n terreinvoorstel en ’n formele kwotasie. Geen bespreking is finaal voordat dit goedgekeur is nie.</p>
+      </article>
+      <form className="venue-request-form" onSubmit={submit}>
+        <div className="form-section-heading"><span>1</span><div><strong>Geleentheid</strong><small>Vertel ons wat jy beplan.</small></div></div>
+        <label>Naam van geleentheid<input name="event_name" required placeholder="Byvoorbeeld: familiefees of fondsinsameling" /></label>
+        <div className="venue-form-grid">
+          <label>Tipe geleentheid<select name="event_type" defaultValue="private"><option value="private">Privaat funksie</option><option value="community">Gemeenskapsgeleentheid</option><option value="agriculture">Landbougeleentheid</option><option value="sport">Sportgeleentheid</option><option value="other">Ander</option></select></label>
+          <label>Verwagte gaste<input name="expected_guests" type="number" min="1" inputMode="numeric" placeholder="250" /></label>
+        </div>
+        <div className="venue-form-grid">
+          <label>Voorkeurdatum<input name="preferred_date" type="date" required /></label>
+          <label>Einddatum, indien meerdaags<input name="end_date" type="date" /></label>
+        </div>
+        <label>Terrein of afdeling<select name="venue_area" defaultValue="Hele skougronde"><option>Hele skougronde</option><option>Hoofarena</option><option>Perde-arena</option><option>Hoofverhoog-area</option><option>Nywerheidsaal</option><option>Ander afdeling</option></select></label>
+        <div className="form-section-heading"><span>2</span><div><strong>Kontak en behoeftes</strong><small>Ons gebruik dit om jou versoek op te volg.</small></div></div>
+        <div className="venue-form-grid">
+          <label>Kontakpersoon<input name="contact_name" required defaultValue={user.name} /></label>
+          <label>Selfoonnommer<input name="contact_phone" required inputMode="tel" defaultValue={user.phone || ""} /></label>
+        </div>
+        <label>Besonderhede en terreinbehoeftes<textarea name="details" required placeholder="Beskryf die geleentheid, opstelling, elektrisiteit, toegang, parkering of enige ander behoeftes." /></label>
+        {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+        {error && <p className="form-error">{error}</p>}
+        <button className="app-primary" disabled={busy}>{busy ? <RefreshCw className="spin" /> : <ClipboardCheck />}{busy ? "Stuur versoek…" : "Stuur besprekingsversoek"}</button>
+        <small className="venue-disclaimer">Die Skoukantoor bevestig beskikbaarheid, koste, voorwaardes en die finale bespreking afsonderlik.</small>
+      </form>
+      <section className="venue-request-history">
+        <div className="section-heading"><div><p className="eyebrow">Opvolg</p><h2>My versoeke</h2></div><span>{requests.length}</span></div>
+        {loading ? <p className="loading-line"><RefreshCw className="spin" /> Laai versoeke…</p> : requests.length ? requests.map((request) => (
+          <article key={request.id}>
+            <div><small>{request.preferred_date}</small><strong>{request.event_name}</strong><p>{request.venue_area}{request.expected_guests ? ` · ${request.expected_guests} gaste` : ""}</p></div>
+            <span data-status={request.status}>{statusLabel(request.status)}</span>
+          </article>
+        )) : <EmptyState icon={<Landmark />} title="Nog geen versoeke nie" text="Jou eerste terreinbesprekingsversoek sal hier verskyn." />}
+      </section>
+    </div>
+  );
+}
+
 function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey: string; user: AppUser; tickets: AppTicket[]; wallets: AppWallet[]; onClose: () => void }) {
   const moduleInfo = appModules.find((item) => item.key === moduleKey);
   const ModuleIcon = moduleInfo?.icon;
@@ -941,10 +1092,10 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
   );
 }
 
-function TicketsFlow({ user, tickets }: { user: AppUser; tickets: AppTicket[] }) {
+function TicketsFlow({ user, tickets, standalone = false }: { user: AppUser; tickets: AppTicket[]; standalone?: boolean }) {
   const [family, setFamily] = useState<FamilyMember[]>([]);
   const [assigning, setAssigning] = useState<number | null>(null);
-  const [buying, setBuying] = useState(false);
+  const [buying, setBuying] = useState(standalone);
   const [error, setError] = useState("");
   useEffect(() => {
     void api("/api/app/family")
@@ -964,15 +1115,16 @@ function TicketsFlow({ user, tickets }: { user: AppUser; tickets: AppTicket[] })
   };
   return (
     <>
-      <span className="detail-icon"><Ticket /></span>
-      <p className="eyebrow">My kaartjies</p>
-      <h2>Koop of wys kaartjies</h2>
-      <button className="sheet-primary-link sheet-primary-button" onClick={() => setBuying(!buying)}>
-        {buying ? "Terug na my kaartjies" : "Koop kaartjies"} <ArrowRight />
-      </button>
+      {!standalone && <><span className="detail-icon"><Ticket /></span><p className="eyebrow">My kaartjies</p><h2>Koop of wys kaartjies</h2></>}
+      <div className={standalone ? "ticket-page-tabs" : ""}>
+        <button className={`sheet-primary-link sheet-primary-button ${standalone && buying ? "active" : ""}`} onClick={() => setBuying(true)}>
+          Koop kaartjies <ArrowRight />
+        </button>
+        {standalone && <button className={`sheet-primary-link sheet-primary-button ${!buying ? "active" : ""}`} onClick={() => setBuying(false)}>My kaartjies <Ticket /></button>}
+      </div>
       {buying && <TicketPurchase user={user} />}
       {error && <p className="form-error">{error}</p>}
-      {tickets.length ? (
+      {!buying && (tickets.length ? (
         <div className="app-ticket-list sheet-list">
           {tickets.map((ticket) => (
             <article key={ticket.id} className="app-ticket-card">
@@ -991,7 +1143,7 @@ function TicketsFlow({ user, tickets }: { user: AppUser; tickets: AppTicket[] })
             </article>
           ))}
         </div>
-      ) : <EmptyState icon={<Ticket />} title="Geen kaartjies gevind nie" text="Nuwe aankope wat by jou bevestigde e-pos en selfoon pas, verskyn outomaties hier." />}
+      ) : <EmptyState icon={<Ticket />} title="Geen kaartjies gevind nie" text="Nuwe aankope wat by jou bevestigde e-pos en selfoon pas, verskyn outomaties hier." />)}
     </>
   );
 }
