@@ -943,7 +943,7 @@ export default function HomePage() {
   };
 
   if (booting) return <Splash />;
-  if (me && (me.user.verified || me.user.source === "staff")) return <Dashboard data={me} message={message} onLogout={logout} />;
+  if (me && (me.user.verified || me.user.source === "staff")) return <Dashboard data={me} message={message} health={health} onLogout={logout} />;
 
   return (
     <main className="app-auth auth-screen">
@@ -1174,7 +1174,7 @@ export default function HomePage() {
   );
 }
 
-function Dashboard({ data, message, onLogout }: { data: MeResponse; message: string; onLogout: () => void }) {
+function Dashboard({ data, message, health, onLogout }: { data: MeResponse; message: string; health: AppHealth | null; onLogout: () => void }) {
   const { user, tickets, wallets } = data;
   const actualView: RoleView = user.role === "visitor" ? "visitor" : ["vendor", "exhibitor", "uitstaller"].includes(user.role) ? "vendor" : ["admin", "committee", "manager"].includes(user.role) ? "committee" : "staff";
   const [tab, setTab] = useState<AppTab>("home"),
