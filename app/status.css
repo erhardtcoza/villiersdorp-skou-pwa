@@ -1,0 +1,41 @@
+.status-page{min-height:100dvh;max-width:680px;margin:0 auto;padding:20px;background:var(--paper);color:var(--ink)}
+.status-hero{position:relative;overflow:hidden;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;padding:22px;border-radius:28px;color:white;background:radial-gradient(circle at 92% 8%,#d6a72c55,transparent 30%),linear-gradient(145deg,#07351d,#135e35);box-shadow:0 18px 35px #07351d28}
+.status-hero img{width:136px;height:auto;margin-bottom:14px;border-radius:16px;background:white}
+.status-hero p{margin:0;color:#d6b44d;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.14em}
+.status-hero h1{margin:5px 0 7px;font-family:Georgia,serif;font-size:34px;line-height:1}
+.status-hero span:not(.status-pill){display:block;max-width:410px;color:#dcebd7;font-size:13px;line-height:1.45}
+.status-pill{display:inline-flex;align-items:center;gap:7px;padding:9px 11px;border-radius:999px;background:#ffffff16;font-size:12px;font-weight:900}
+.status-pill.ok{color:#eaffdf;background:#438b2f}
+.status-pill.warn{color:#183224;background:#f4d06f}
+.status-pill.fail{color:white;background:#b83232}
+.status-card{margin-top:16px;padding:18px;border:1px solid var(--line);border-radius:24px;background:white;box-shadow:0 14px 30px #07351d10}
+.status-card-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.status-card-title p{margin:0;color:var(--muted);font-size:11px;font-weight:850}
+.status-card-title h2{margin:3px 0 0;font-size:17px}
+.status-card-title button{display:flex;align-items:center;gap:7px;padding:10px 12px;border:1px solid var(--line);border-radius:13px;color:var(--wine);background:white;font-weight:850}
+.status-card-title button:disabled{opacity:.65}
+.spin{animation:health-spin 1s linear infinite}
+@keyframes health-spin{to{transform:rotate(360deg)}}
+.status-error{margin-top:12px;padding:12px;border-radius:14px;color:#8b1e1e;background:#ffe7e7;font-weight:800}
+.status-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:16px 0}
+.status-summary-grid article{min-width:0;padding:13px;border:1px solid #e5dfd5;border-radius:16px;background:#fffdf8}
+.status-summary-grid svg{color:var(--wine)}
+.status-summary-grid small,.status-summary-grid strong{display:block}
+.status-summary-grid small{margin-top:8px;color:var(--muted);font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+.status-summary-grid strong{margin-top:3px;overflow-wrap:anywhere;font-size:13px}
+.status-checks{display:grid;gap:8px}
+.status-checks article{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:15px;background:#fbfaf5}
+.status-checks article.ok{border-color:#cfe5bd;background:#f2f8ed}
+.status-checks article.warn{border-color:#edd797;background:#fff8e7}
+.status-checks article.fail{border-color:#efb9b9;background:#fff0f0}
+.status-checks span{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;color:white;background:#748074}
+.status-checks .ok span{background:#4c8d31}
+.status-checks .warn span{background:#c38b12}
+.status-checks .fail span{background:#b83232}
+.status-checks strong{text-transform:capitalize}
+.status-checks p{margin:3px 0 0;color:var(--muted);font-size:11px;line-height:1.35}
+.status-checks b{font-size:10px}
+.status-note{margin-top:14px;padding:14px;border-left:4px solid var(--gold);border-radius:16px;background:#fff7df}
+.status-note p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
+.status-back{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:15px;padding:14px;border-radius:16px;color:white;background:var(--wine);text-decoration:none;font-weight:900}
+@media(max-width:480px){.status-page{padding:14px}.status-hero{grid-template-columns:1fr}.status-pill{width:max-content}.status-summary-grid{grid-template-columns:1fr}.status-card-title{align-items:flex-start;flex-direction:column}.status-card-title button{width:100%;justify-content:center}.status-checks article{grid-template-columns:auto 1fr}.status-checks b{grid-column:2;width:max-content}}

@@ -12,6 +12,7 @@ type AppUser = {
   role: string;
   source: "visitor" | "staff";
   verified: boolean;
+  permissions?: string[];
 };
 type AppTicket = {
   id: number;
@@ -48,9 +49,14 @@ type MeResponse = {
   wallets: AppWallet[];
   linkage: string;
 };
+type AppHealth = {
+  ok: boolean;
+  checked_at?: string;
+  event?: { ticket_types?: number };
+};
 type AuthView = "welcome" | "login" | "register" | "verify" | "forgot" | "reset-code" | "reset-password";
 type AppTab = "home" | "messages" | "calendar" | "profile";
-type AppPage = "home" | "tickets" | "venues";
+type AppPage = "home" | "tickets" | "venues" | "bar";
 type RoleView = "visitor" | "vendor" | "staff" | "committee";
 type AppModule = {
   key: string;
@@ -58,8 +64,10 @@ type AppModule = {
   detail: string;
   icon: LucideIcon;
   roles: RoleView[];
+  permissions?: string[];
   href?: string;
   live?: boolean;
+  status?: "live" | "admin" | "coming";
 };
 type VenueRequest = {
   id: number;
@@ -72,6 +80,79 @@ type VenueRequest = {
   details: string;
   status: string;
   created_at: number;
+};
+type ServiceRequest = {
+  id: number;
+  module_key: string;
+  request_type: string;
+  title: string;
+  contact_name: string;
+  contact_email?: string | null;
+  contact_phone: string;
+  details: string;
+  payload_json?: string | null;
+  status: string;
+  admin_notes?: string | null;
+  created_at: number;
+  updated_at: number;
+};
+type ServiceField = {
+  key: string;
+  label: string;
+  type?: "text" | "textarea" | "select" | "date" | "number" | "email" | "tel";
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+};
+type ServiceModuleConfig = {
+  eyebrow: string;
+  title: string;
+  intro: string;
+  requestType: string;
+  primaryLabel?: string;
+  fields: ServiceField[];
+};
+type BarTransactionItem = {
+  id: number;
+  name: string;
+  qty: number;
+  unit_price_cents: number;
+  total_cents: number;
+  fulfilled_qty: number;
+};
+type BarRefund = {
+  id: number;
+  method: string;
+  amount_cents: number;
+  status: string;
+  reason?: string | null;
+  actor_name?: string | null;
+  created_at: number;
+};
+type BarTransaction = {
+  id: number;
+  order_code: string;
+  created_at: number;
+  status: string;
+  group_name: string;
+  location_name: string;
+  operator_name: string;
+  customer_name: string;
+  customer_mobile: string;
+  wallet_id: string;
+  total_cents: number;
+  refunded_cents: number;
+  refundable_cents: number;
+  payment: null | {
+    id: number;
+    method: string;
+    provider: string;
+    provider_reference: string;
+    status: string;
+    amount_cents: number;
+  };
+  items: BarTransactionItem[];
+  refunds: BarRefund[];
 };
 
 const roleNames: Record<string, string> = {
@@ -95,6 +176,7 @@ const appModules: AppModule[] = [
     icon: Ticket,
     roles: allViews,
     live: true,
+    status: "live",
   },
   {
     key: "family",
@@ -103,6 +185,16 @@ const appModules: AppModule[] = [
     icon: Users,
     roles: ["visitor", "committee"],
     live: true,
+    status: "live",
+  },
+  {
+    key: "membership",
+    title: "Lidmaatskap",
+    detail: "Sluit aan, hernu of vra lidmaatskap-hulp",
+    icon: ShieldCheck,
+    roles: ["visitor", "staff", "committee"],
+    live: true,
+    status: "live",
   },
   {
     key: "programme",
@@ -112,6 +204,7 @@ const appModules: AppModule[] = [
     roles: allViews,
     href: "https://www.villiersdorpskou.co.za/#program",
     live: true,
+    status: "admin",
   },
   {
     key: "map",
@@ -121,6 +214,7 @@ const appModules: AppModule[] = [
     roles: allViews,
     href: "https://www.villiersdorpskou.co.za/vendors",
     live: true,
+    status: "admin",
   },
   {
     key: "photos",
@@ -128,6 +222,7 @@ const appModules: AppModule[] = [
     detail: "Foto’s en albums van die Skou",
     icon: Images,
     roles: allViews,
+    status: "coming",
   },
   {
     key: "wallet",
@@ -136,6 +231,7 @@ const appModules: AppModule[] = [
     icon: WalletCards,
     roles: ["visitor", "committee"],
     live: true,
+    status: "live",
   },
   {
     key: "vendor-profile",
@@ -143,6 +239,8 @@ const appModules: AppModule[] = [
     detail: "Besigheid- en stalletjie-inligting",
     icon: Store,
     roles: ["vendor", "committee"],
+    live: true,
+    status: "live",
   },
   {
     key: "vendor-application",
@@ -150,8 +248,8 @@ const appModules: AppModule[] = [
     detail: "Status, vereistes en dokumente",
     icon: ClipboardCheck,
     roles: ["vendor", "committee"],
-    href: "https://www.villiersdorpskou.co.za/vendor-apply",
     live: true,
+    status: "live",
   },
   {
     key: "vendor-team",
@@ -159,6 +257,8 @@ const appModules: AppModule[] = [
     detail: "Werknemers en bywoningsdae",
     icon: Users,
     roles: ["vendor", "committee"],
+    live: true,
+    status: "live",
   },
   {
     key: "passes",
@@ -166,6 +266,8 @@ const appModules: AppModule[] = [
     detail: "QR-passe vir jou span",
     icon: QrCode,
     roles: ["vendor", "committee"],
+    live: true,
+    status: "live",
   },
   {
     key: "pos",
@@ -173,8 +275,20 @@ const appModules: AppModule[] = [
     detail: "Verkope, kasse en dagafsluiting",
     icon: Store,
     roles: ["staff", "committee"],
+    permissions: ["pos_sales", "bar_pos"],
     href: "https://tickets.villiersdorpskou.co.za/app",
     live: true,
+    status: "admin",
+  },
+  {
+    key: "bar-transactions",
+    title: "Kroeg",
+    detail: "Laaste transaksies en gemagtigde refunds",
+    icon: Activity,
+    roles: ["staff", "committee"],
+    permissions: ["bar_transactions", "bar_refunds"],
+    live: true,
+    status: "live",
   },
   {
     key: "applications",
@@ -182,8 +296,10 @@ const appModules: AppModule[] = [
     detail: "Hersien, keur goed en ken staanplekke toe",
     icon: ClipboardCheck,
     roles: ["staff", "committee"],
+    permissions: ["vendors_applications", "vendors_approve"],
     href: "https://www.villiersdorpskou.co.za/admin#vendors",
     live: true,
+    status: "admin",
   },
   {
     key: "horses",
@@ -191,8 +307,10 @@ const appModules: AppModule[] = [
     detail: "Inskrywings, klasse en dokumente",
     icon: Trophy,
     roles: ["staff", "committee"],
+    permissions: ["horses_entries", "horses_approve", "horses_programme"],
     href: "https://www.villiersdorpskou.co.za/admin#horses",
     live: true,
+    status: "live",
   },
   {
     key: "venues",
@@ -201,6 +319,7 @@ const appModules: AppModule[] = [
     icon: Landmark,
     roles: allViews,
     live: true,
+    status: "live",
   },
   {
     key: "venue-approvals",
@@ -208,6 +327,49 @@ const appModules: AppModule[] = [
     detail: "Hersien versoeke en pryse",
     icon: ClipboardCheck,
     roles: ["staff", "committee"],
+    permissions: ["grounds_venues", "grounds_facilities"],
+    status: "admin",
+  },
+  {
+    key: "buildings",
+    title: "Geboue",
+    detail: "Geboue, sale en terrein gereedheid",
+    icon: Home,
+    roles: ["staff", "committee"],
+    permissions: ["buildings_manage", "grounds_facilities"],
+    live: true,
+    status: "live",
+  },
+  {
+    key: "rentals",
+    title: "Verhurings",
+    detail: "Verhurings, besprekings en opvolg",
+    icon: Landmark,
+    roles: ["staff", "committee"],
+    permissions: ["rentals_manage", "grounds_venues"],
+    live: true,
+    status: "live",
+  },
+  {
+    key: "krymekaar",
+    title: "Krymekaar & Slaglam",
+    detail: "Veiling, event en eie vermaak",
+    icon: Trophy,
+    roles: ["staff", "committee"],
+    permissions: ["krymekaar_manage", "entertainment_programme"],
+    live: true,
+    status: "live",
+  },
+  {
+    key: "finance",
+    title: "Finansies",
+    detail: "Invoices, betalings, bank recon en verslae",
+    icon: WalletCards,
+    roles: ["staff", "committee"],
+    permissions: ["finance_reconcile", "finance_reports", "vendors_invoices", "bar_cashup"],
+    href: "https://www.villiersdorpskou.co.za/admin#invoices",
+    live: true,
+    status: "admin",
   },
   {
     key: "meetings",
@@ -215,6 +377,9 @@ const appModules: AppModule[] = [
     detail: "Agendas, RSVP’s en dokumente",
     icon: CalendarDays,
     roles: ["staff", "committee"],
+    permissions: ["meetings_manage"],
+    live: true,
+    status: "live",
   },
   {
     key: "gates",
@@ -222,8 +387,10 @@ const appModules: AppModule[] = [
     detail: "Skandeer kaartjies en monitor toegang",
     icon: ScanLine,
     roles: ["staff", "committee"],
+    permissions: ["gates_scan"],
     href: "https://tickets.villiersdorpskou.co.za/scan",
     live: true,
+    status: "admin",
   },
   {
     key: "reports",
@@ -231,8 +398,10 @@ const appModules: AppModule[] = [
     detail: "Bywoning, verkope en stelselgesondheid",
     icon: Activity,
     roles: ["staff", "committee"],
+    permissions: ["ops_reports"],
     href: "https://www.villiersdorpskou.co.za/admin#posv1",
     live: true,
+    status: "admin",
   },
   {
     key: "users",
@@ -240,10 +409,253 @@ const appModules: AppModule[] = [
     detail: "Bestuur personeeltoegang en regte",
     icon: CircleUserRound,
     roles: ["committee"],
+    permissions: ["access_manage"],
     href: "https://www.villiersdorpskou.co.za/admin",
     live: true,
+    status: "admin",
   },
 ];
+
+function hasAnyPermission(user: AppUser, required?: string[]) {
+  if (!required?.length) return true;
+  return required.some((permission) => user.permissions?.includes(permission));
+}
+
+const modulePanels: Record<string, { status: string; ready: string[]; next: string[]; action?: string; href?: string }> = {
+  membership: {
+    status: "Lidmaatskap kan nou direk uit die app as ’n versoek ingedien word. Admin sien dit onder Admin → App → App-versoeke.",
+    ready: ["Dien lidmaatskap- of hernuwingsversoek in", "Gebruik jou app-kontakbesonderhede", "Hou opvolg/status in die app"],
+    next: ["Koppel direk aan betaalde lid-rekords", "Outomatiese faktuur en betaalstatus", "Bestuursverkiesbaarheid volgens betaalde lidstatus"],
+  },
+  programme: {
+    status: "Die publieke skouprogram is reeds live. Die app-spesifieke programme, filters en push reminders word nog teen dieselfde bron gekoppel.",
+    ready: ["Open die huidige publieke program", "Wys Vrydag/Saterdag skou-inligting", "Hou een app-ingang vir visitors, vendors, staff en committee"],
+    next: ["Koppel program-items aan ’n live API", "Voeg persoonlike gunstelinge en reminders by", "Maak Perde/Vermaak afdelings filterbaar"],
+    action: "Maak huidige program oop",
+  },
+  map: {
+    status: "Die vendor/public map is beskikbaar. Die volgende stap is om die amptelike terrein-poligone en vendor staanplekke app-native te teken.",
+    ready: ["Open die huidige vendor/skoukaart", "Gebruik dieselfde Skou branding", "Wys map as visitor/vendor/staff funksie"],
+    next: ["Import amptelike vendor maps", "Koppel staanplekke aan approved vendors", "Voeg hek, arena, kroeg, toilette en noodpunte as filters by"],
+    action: "Maak huidige skoukaart oop",
+  },
+  photos: {
+    status: "Foto’s is gereserveer vir die app. Dit moet eers ’n moderation/consent flow kry voor live uploads oopgemaak word.",
+    ready: ["Menu en app plek is gereed", "Kan later albums en social media assets wys"],
+    next: ["Besluit wie mag upload", "Stoor foto's in R2", "Bou approval/moderation voordat dit publiek wys"],
+  },
+  "vendor-profile": {
+    status: "Uitstallers kan nou profielveranderinge uit die app indien vir logo, Facebook, beskrywing en kontakdetails.",
+    ready: ["Dien profiel-update uit die app in", "Admin sien dit in App-versoeke", "Gebruik dieselfde access model"],
+    next: ["Koppel direk aan vendor rekord", "Logo upload na permanente storage", "Selfdiens publiseer/goedkeur workflow"],
+  },
+  "vendor-application": {
+    status: "’n Uitstaller-aansoek kan nou uit die app ingedien word vir admin-opvolg. Die formele vendor admin en faktuur-flow bly die bron van waarheid.",
+    ready: ["Dien aansoek uit die app in", "Admin kan status/notes terugskryf", "Aansoekgeskiedenis wys in app"],
+    next: ["Koppel direk aan vendor application tabel", "Gebruik finale 2026 pryslyste en afdeling-keuses", "Outomatiese approval/rejection/invoice boodskappe"],
+  },
+  "vendor-team": {
+    status: "Uitstallers kan nou span-, voertuig- en bandjie-inligting uit die app indien.",
+    ready: ["Dien spanlys uit die app in", "Admin kry alle details in een queue"],
+    next: ["Koppel employee records", "Genereer QR-passe", "Laat vendor self veranderings bevestig"],
+  },
+  passes: {
+    status: "Hekpas-versoeke kan nou in die app ingestuur word; finale QR-passe bly onder adminbeheer totdat vendor/perde/staff lyste vas is.",
+    ready: ["Vra ’n hekpas of verandering aan", "Admin kan opvolgstatus terugskryf"],
+    next: ["Koppel passes aan vendor/perde/staff records", "Maak QR/NFC compatible", "Laat hek scanner dit valideer"],
+  },
+  pos: {
+    status: "POS V1 is live as aparte bedienerskerm vir controlled testing. Die app wys nou ’n veilige launch-pad in plaas van ’n dooie menu.",
+    ready: ["Open live POS", "Terminal lease en wallet guard bly op backend", "POS/scan toegang word deur server sessie beheer"],
+    next: ["Voltooi POS merge", "Finaliseer Yoco terminal/live refund flow", "Voltooi real-device tablet testing"],
+    action: "Maak POS oop",
+  },
+  applications: {
+    status: "Uitstaller-aansoeke word tans in die hoof admin bestuur. Die app-module is net vir toegewyde staff/committee sigbaar.",
+    ready: ["Open live admin vendors", "Access is permission-based"],
+    next: ["Maak application review app-native", "Koppel approval/rejection templates", "Koppel fakture en vendor profile verify"],
+    action: "Maak vendor admin oop",
+  },
+  horses: {
+    status: "Perde is in die access model ingebou. Die volledige perde app-flow wag nog vir die afdeling se finale antwoorde/goedkeuring.",
+    ready: ["Perde afdeling en permissions bestaan", "Menu kan net aan Perde users gewys word"],
+    next: ["Koppel vorige vertoners", "Bou inskrywings/klasse/fakture", "Koppel programme en bandjies"],
+    action: "Maak perde admin oop",
+  },
+  "venue-approvals": {
+    status: "Terreinbesprekings kan deur visitors ingedien word en admin kan dit nou op dieselfde backend rekord hersien en status verander.",
+    ready: ["Visitor terreinbespreking is live", "Requests het status/history", "Admin kan submitted/reviewing/approved/declined/cancelled terugskryf"],
+    next: ["Voeg pricing/conditions by", "Skep faktuur na goedkeuring", "Maak die approval queue later app-native vir Gronde-komitee"],
+    href: "https://www.villiersdorpskou.co.za/admin#app",
+    action: "Maak app-admin oop",
+  },
+  buildings: {
+    status: "Gebou- en terrein-gereedheid versoeke kan nou uit die app aangeteken word vir die betrokke bestuur.",
+    ready: ["Permission-gated app menu", "Dien gebou take/kwessies in", "Kan saam met Gronde/Fasiliteite werk"],
+    next: ["Bou app-native gebou take/checklists", "Koppel aan verhurings en terreinversoeke", "Voeg verantwoordelike persone per gebou by"],
+  },
+  rentals: {
+    status: "Verhuring-navrae en opvolg kan nou uit die app gestuur word en deur admin opgevolg word.",
+    ready: ["Permission-gated app menu", "Dien verhuring-opvolg in", "Kan terreinbesprekings as bron gebruik"],
+    next: ["Koppel quote/faktuur na goedkeuring", "Maak huurkontrak/voorwaardes templates", "Wys kalender van verhuring versoeke"],
+  },
+  krymekaar: {
+    status: "Krymekaar/Slaglam versoeke en programnotas kan nou uit die app ingestuur word.",
+    ready: ["Permission-gated app menu", "Program- of veilingnotas kan ingedien word", "Kan saam met Vermaak permissions gebruik word"],
+    next: ["Bou event-spesifieke program items", "Koppel eie entertainers", "Koppel veiling/admin dokumente"],
+  },
+  finance: {
+    status: "Finansies is nou apart permission-gated vir Blair/finansiële bestuur: invoices, betalings, recon en verslagdoening.",
+    ready: ["Invoices admin launch", "Finance permissions vir recon en reports", "Kan hoë-risiko betalingsrolle apart hou"],
+    next: ["Bankstaat import", "Transaksie matching", "Jaar-einde reports en proefbalans"],
+    action: "Maak fakture oop",
+  },
+  meetings: {
+    status: "Vergadering-, agenda- en notule versoeke kan nou uit die app ingestuur word.",
+    ready: ["Permission-gated app menu", "Dien agenda/notule item in", "Admin kan status terugskryf"],
+    next: ["Koppel agendas/notules aan R2 of DB", "RSVP/reminder flow", "Dokument upload/download"],
+  },
+  gates: {
+    status: "Die live scanner bly tans die betroubare skerm vir hekbeheer. Die app wys ’n launch-pad vir users met gate access.",
+    ready: ["Open live scanner", "Server vereis staff session", "Scan in/out bly geaudit"],
+    next: ["Maak scanner app-native", "Offline queue", "Finaliseer NFC/QR saamwerk"],
+    action: "Maak scanner oop",
+  },
+  reports: {
+    status: "Operasionele verslae lê tans in admin/POS V1 preflight en reports. Hierdie app-module word net vir reports permission gewys.",
+    ready: ["Open live admin reports", "Permission-gated module"],
+    next: ["Koppel live app dashboard", "Wys laaste verkope, hek scans en terminal heartbeats", "Maak export opsies"],
+    action: "Maak admin reports oop",
+  },
+  users: {
+    status: "Gebruikers en rolle word nou in Admin → Users → Access bestuur. Hierdie module is net sigbaar vir access managers.",
+    ready: ["Create/edit users", "Assign departments", "Grant/revoke explicit permissions"],
+    next: ["Maak app-native user admin", "Voeg audit history by", "Koppel Skou-lid prerequisite enforcement"],
+    action: "Maak admin users oop",
+  },
+};
+
+const requestModuleDetails: Record<string, ServiceModuleConfig> = {
+  membership: {
+    eyebrow: "Lidmaatskap",
+    title: "Lidmaatskap versoek",
+    intro: "Gebruik hierdie om aan te sluit, hernuwing te vra, of ’n lidmaatskap-probleem aan die kantoor te stuur.",
+    requestType: "membership_support",
+    primaryLabel: "Stuur lidmaatskap-versoek",
+    fields: [
+      { key: "membership_need", label: "Wat moet gebeur?", type: "select", required: true, options: ["Nuwe lid", "Hernu lidmaatskap", "Betaalstatus navraag", "Persoonlike besonderhede verander", "Ander"] },
+      { key: "member_reference", label: "Lidnaam of verwysing indien bekend", placeholder: "Byvoorbeeld: familienaam / ou lidnommer" },
+    ],
+  },
+  "vendor-application": {
+    eyebrow: "Uitstallers",
+    title: "Stalletjie-aansoek",
+    intro: "Dien jou stalletjie-aansoek of navraag hier in. Die kantoor sal dit teen die formele vendor-proses en beskikbare staanplekke hanteer.",
+    requestType: "vendor_application",
+    primaryLabel: "Stuur stalletjie-aansoek",
+    fields: [
+      { key: "business_name", label: "Besigheidsnaam", required: true },
+      { key: "stall_category", label: "Stalletjie-afdeling", type: "select", required: true, options: ["Kos", "Food court", "Agri", "Nywerheidsaal", "Buite stalletjie", "Kinder area", "Ander"] },
+      { key: "products", label: "Wat wil jy verkoop of uitstal?", type: "textarea", required: true, placeholder: "Produklys, spyskaart of kort beskrywing" },
+      { key: "electricity", label: "Benodig elektrisiteit?", type: "select", options: ["Nee", "Ja", "Nie seker nie"] },
+    ],
+  },
+  "vendor-profile": {
+    eyebrow: "Uitstallers",
+    title: "Profiel en bemarking",
+    intro: "Stuur jou logo/Facebook/Instagram/link besonderhede sodat die Skou jou publieke uitstallerprofiel kan regmaak.",
+    requestType: "vendor_profile",
+    primaryLabel: "Stuur profiel-info",
+    fields: [
+      { key: "business_name", label: "Besigheidsnaam", required: true },
+      { key: "facebook", label: "Facebook blad of skakel" },
+      { key: "instagram", label: "Instagram of webwerf" },
+      { key: "logo_note", label: "Logo/foto nota", type: "textarea", placeholder: "Sê vir ons of jy ’n logo/foto per WhatsApp of e-pos stuur." },
+    ],
+  },
+  "vendor-team": {
+    eyebrow: "Uitstallers",
+    title: "Span en voertuie",
+    intro: "Stuur die mense, voertuie en dae wat by jou stalletjie hoort vir bandjies en hekpasse.",
+    requestType: "vendor_team",
+    primaryLabel: "Stuur span-inligting",
+    fields: [
+      { key: "business_name", label: "Besigheidsnaam", required: true },
+      { key: "team_members", label: "Spanlede / werknemers", type: "textarea", required: true, placeholder: "Naam, selfoon, dag(e) teenwoordig" },
+      { key: "vehicles", label: "Voertuigregistrasies", type: "textarea", placeholder: "Registrasienommers en voertuigbeskrywing" },
+    ],
+  },
+  passes: {
+    eyebrow: "Hekpasse",
+    title: "Pas-versoek",
+    intro: "Gebruik hierdie vir vendor-, perde-, staff- of ander hekpasse wat aan persone of voertuie gekoppel moet word.",
+    requestType: "access_pass",
+    primaryLabel: "Stuur pas-versoek",
+    fields: [
+      { key: "pass_type", label: "Tipe pas", type: "select", required: true, options: ["Uitstaller", "Perde", "Staff", "Komitee", "Voertuig", "Ander"] },
+      { key: "people_or_vehicle", label: "Persoon/voertuig details", type: "textarea", required: true },
+      { key: "valid_days", label: "Geldige dae", type: "select", options: ["Vrydag", "Saterdag", "Beide dae", "Ander"] },
+    ],
+  },
+  horses: {
+    eyebrow: "Perde",
+    title: "Perde navraag of inskrywing",
+    intro: "Dien perde-inskrywings, klasnavrae, vertonerbesonderhede of program-opvolg uit die app in.",
+    requestType: "horse_entry",
+    primaryLabel: "Stuur perde-versoek",
+    fields: [
+      { key: "stable_or_school", label: "Stoet / ryskool / vertoner", required: true },
+      { key: "entry_type", label: "Versoek tipe", type: "select", required: true, options: ["Nuwe inskrywing", "Klasnavraag", "Bandjies", "Nommer deposito", "Program navraag", "Ander"] },
+      { key: "horse_classes", label: "Perde en klasse", type: "textarea", placeholder: "Perdnaam, ruiter/vertoner, klasnommers indien bekend" },
+    ],
+  },
+  buildings: {
+    eyebrow: "Geboue",
+    title: "Gebou / terrein taak",
+    intro: "Teken gebou-, saal- of terrein gereedheid take uit die app aan.",
+    requestType: "building_task",
+    primaryLabel: "Stuur gebou-taak",
+    fields: [
+      { key: "area", label: "Gebou of area", type: "select", required: true, options: ["Nywerheidsaal", "Brandweersaal", "Veteranesaal", "Kantoor", "Toilette", "Kroeg", "Ander"] },
+      { key: "priority", label: "Prioriteit", type: "select", options: ["Normaal", "Dringend", "Voor skoudag klaar", "Na skou opvolg"] },
+    ],
+  },
+  rentals: {
+    eyebrow: "Verhurings",
+    title: "Verhuring opvolg",
+    intro: "Dien ’n verhuring navraag, opvolg of verandering in.",
+    requestType: "rental_followup",
+    primaryLabel: "Stuur verhuring-versoek",
+    fields: [
+      { key: "rental_type", label: "Tipe verhuring", type: "select", required: true, options: ["Saal", "Terrein", "Toerusting", "Parkering", "Ander"] },
+      { key: "event_date", label: "Datum indien bekend", type: "date" },
+      { key: "client_or_event", label: "Kliënt / geleentheid naam" },
+    ],
+  },
+  krymekaar: {
+    eyebrow: "Krymekaar",
+    title: "Krymekaar / Slaglam versoek",
+    intro: "Stuur program-, veiling-, entertainer- of operasionele notas vir Krymekaar en Slaglam.",
+    requestType: "krymekaar_event",
+    primaryLabel: "Stuur Krymekaar-versoek",
+    fields: [
+      { key: "event_area", label: "Area", type: "select", options: ["Krymekaar", "Slaglam Veiling", "Vermaak", "Kos/verkope", "Ander"] },
+      { key: "needed_by", label: "Benodig teen", type: "date" },
+    ],
+  },
+  meetings: {
+    eyebrow: "Vergaderings",
+    title: "Agenda / notule versoek",
+    intro: "Stuur ’n agenda item, notule-opmerking of vergadering opvolg.",
+    requestType: "meeting_admin",
+    primaryLabel: "Stuur vergadering-versoek",
+    fields: [
+      { key: "meeting_type", label: "Vergadering tipe", type: "select", options: ["AJV", "Bestuur", "Komitee", "Afdeling", "Ander"] },
+      { key: "meeting_date", label: "Datum indien bekend", type: "date" },
+      { key: "agenda_item", label: "Agenda item / notule punt", type: "textarea", required: true },
+    ],
+  },
+};
 
 async function api(path: string, init?: RequestInit) {
   const response = await fetch(path, {
@@ -281,6 +693,7 @@ export default function HomePage() {
   const [resetEmail, setResetEmail] = useState(""),
     [resetToken, setResetToken] = useState("");
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [health, setHealth] = useState<AppHealth | null>(null);
 
   const loadMe = async () => {
     try {
@@ -291,9 +704,19 @@ export default function HomePage() {
       setMe(null);
     }
   };
+  const loadHealth = async () => {
+    try {
+      const response = await fetch("/api/app/health", { cache: "no-store" });
+      const data = await response.json().catch(() => null) as AppHealth | null;
+      setHealth(data && typeof data.ok === "boolean" ? data : { ok: false });
+    } catch {
+      setHealth({ ok: false });
+    }
+  };
   useEffect(() => {
     const timer = setTimeout(() => setBooting(false), 1250);
     const boot = queueMicrotask(() => void loadMe());
+    void loadHealth();
     return () => {
       clearTimeout(timer);
       void boot;
@@ -303,6 +726,20 @@ export default function HomePage() {
     const params = new URLSearchParams(window.location.search);
     const topupId = params.get("topup");
     const payment = params.get("payment");
+    const ticketCode = params.get("code");
+    if (payment === "ticket" && ticketCode) {
+      queueMicrotask(async () => {
+        await loadMe();
+        setMessage("Dankie. Yoco het jou kaartjie-betaling ontvang; jou kaartjies sal hier wys sodra die betaling bevestig is.");
+        window.history.replaceState({}, "", "/kaartjies");
+      });
+      return;
+    }
+    if (payment === "cancelled" && ticketCode) {
+      queueMicrotask(() => setMessage("Die kaartjie-betaling is gekanselleer; geen kaartjies is uitgereik nie."));
+      window.history.replaceState({}, "", "/kaartjies");
+      return;
+    }
     if (!topupId || !payment) return;
     if (payment === "cancelled") {
       queueMicrotask(() => setMessage("Die betaling is gekanselleer; jou beursiebalans het nie verander nie."));
@@ -743,12 +1180,12 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
   const [tab, setTab] = useState<AppTab>("home"),
     [preview, setPreview] = useState<RoleView>(actualView),
     [selected, setSelected] = useState<string | null>(null),
-    [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : "home");
+    [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : window.location.pathname === "/kroeg" ? "bar" : "home");
   const walletTotal = wallets.reduce((sum, w) => sum + w.balance_cents, 0),
-    visible = appModules.filter((item) => item.roles.includes(preview));
-  const pageFromPath = () => window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : "home";
+    visible = appModules.filter((item) => item.roles.includes(preview) && hasAnyPermission(user, item.permissions));
+  const pageFromPath = () => window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : window.location.pathname === "/kroeg" ? "bar" : "home";
   const navigatePage = (next: AppPage, replace = false) => {
-    const path = next === "tickets" ? "/kaartjies" : next === "venues" ? "/terreinbesprekings" : "/";
+    const path = next === "tickets" ? "/kaartjies" : next === "venues" ? "/terreinbesprekings" : next === "bar" ? "/kroeg" : "/";
     window.history[replace ? "replaceState" : "pushState"]({}, "", path);
     setPage(next);
     setTab("home");
@@ -763,6 +1200,7 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
   const openModule = (item: AppModule) => {
     if (item.key === "tickets") navigatePage("tickets");
     else if (item.key === "venues") navigatePage("venues");
+    else if (item.key === "bar-transactions") navigatePage("bar");
     else setSelected(item.key);
   };
   const chooseTab = (next: AppTab) => {
@@ -793,6 +1231,10 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
         ) : page === "venues" ? (
           <AppSubPage eyebrow="Terreinbesprekings" title="Bespreek die Skouterrein" icon={Landmark} onBack={() => navigatePage("home")}>
             <VenueBookingPage user={user} />
+          </AppSubPage>
+        ) : page === "bar" ? (
+          <AppSubPage eyebrow="Kroeg" title="Kroegtransaksies" icon={Activity} onBack={() => navigatePage("home")}>
+            <BarTransactionsPage user={user} />
           </AppSubPage>
         ) : tab === "home" && (
           <>
@@ -832,6 +1274,14 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
                 </span>
               </button>
             </div>
+            <a className={`app-health-strip ${health?.ok ? "ok" : health ? "fail" : "checking"}`} href="/status">
+              {health?.ok ? <CheckCircle2 /> : <Activity />}
+              <span>
+                <strong>{health?.ok ? "Stelsel aanlyn" : health ? "Stelsel aandag nodig" : "Toets stelselstatus"}</strong>
+                <small>{health?.ok ? `${health.event?.ticket_types || 0} kaartjie-tipes beskikbaar` : "Maak statusblad oop vir detail"}</small>
+              </span>
+              <b>Status</b>
+            </a>
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Jou toegang</p>
@@ -899,6 +1349,8 @@ function Dashboard({ data, message, onLogout }: { data: MeResponse; message: str
 
 function AppModuleCard({ item, onOpen }: { item: AppModule; onOpen: () => void }) {
   const Icon = item.icon;
+  const status = item.status || (item.live ? "live" : "coming");
+  const label = status === "live" ? "Live" : status === "admin" ? "Kontak admin / eksterne skerm" : "Kom binnekort";
   const content = (
     <>
       <span className="module-icon">
@@ -907,16 +1359,12 @@ function AppModuleCard({ item, onOpen }: { item: AppModule; onOpen: () => void }
       <span className="module-copy">
         <strong>{item.title}</strong>
         <small>{item.detail}</small>
-        <em data-status={item.live ? "ready" : "planned"}>{item.live ? "Live" : "Word gekoppel"}</em>
+        <em data-status={status}>{label}</em>
       </span>
       <ChevronRight className="chevron" />
     </>
   );
-  return item.href ? (
-    <a className="module-card" href={item.href}>
-      {content}
-    </a>
-  ) : (
+  return (
     <button className="module-card" onClick={onOpen}>
       {content}
     </button>
@@ -1059,6 +1507,162 @@ function VenueBookingPage({ user }: { user: AppUser }) {
   );
 }
 
+function BarTransactionsPage({ user }: { user: AppUser }) {
+  const [transactions, setTransactions] = useState<BarTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [canRefund, setCanRefund] = useState(Boolean(user.permissions?.includes("bar_refunds")));
+  const [activeRefundId, setActiveRefundId] = useState<number | null>(null);
+  const [busyRefundId, setBusyRefundId] = useState<number | null>(null);
+  const [refundAmount, setRefundAmount] = useState<Record<number, string>>({});
+  const [refundMethod, setRefundMethod] = useState<Record<number, string>>({});
+  const [refundReason, setRefundReason] = useState<Record<number, string>>({});
+
+  const loadTransactions = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api("/api/app/bar/transactions?limit=15");
+      setTransactions(result.transactions || []);
+      setCanRefund(Boolean(result.can_refund));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kroegtransaksies kon nie gelaai word nie");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const boot = queueMicrotask(() => void loadTransactions());
+    return () => void boot;
+  }, []);
+
+  const submitRefund = async (transaction: BarTransaction) => {
+    const amount = Math.round(Number(refundAmount[transaction.id] || transaction.refundable_cents / 100) * 100);
+    const method = refundMethod[transaction.id] || (transaction.payment?.method === "event_balance" ? "wallet" : "card");
+    const reason = String(refundReason[transaction.id] || "").trim();
+    setBusyRefundId(transaction.id);
+    setError("");
+    setMessage("");
+    try {
+      const result = await api(`/api/app/bar/transactions/${transaction.id}/refund`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount_cents: amount,
+          method,
+          reason,
+        }),
+      });
+      if (result.transaction) {
+        setTransactions((current) => current.map((row) => row.id === transaction.id ? result.transaction : row));
+      }
+      setActiveRefundId(null);
+      setMessage(result.refund?.status === "pending_provider" ? "Kaart-refund is aangeteken vir Yoco-opvolg." : "Refund is voltooi en die beursie is opgedateer.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Refund kon nie gestoor word nie");
+    } finally {
+      setBusyRefundId(null);
+    }
+  };
+
+  const paymentLabel = (transaction: BarTransaction) => {
+    if (!transaction.payment) return "Geen betaling";
+    if (transaction.payment.method === "event_balance") return "Skoubeursie";
+    if (transaction.payment.method.includes("yoco") || transaction.payment.provider === "yoco") return "Yoco-kaart";
+    return transaction.payment.method;
+  };
+
+  return (
+    <div className="bar-page-content">
+      <article className="bar-intro-card">
+        <small>STAFF TOEGANG</small>
+        <h2>Laaste kroegtransaksies</h2>
+        <p>Slegs personeel met kroeg- of refund-regte kan hierdie aksies uitvoer. Die bediener kontroleer die regte weer voordat ’n refund gestoor word.</p>
+      </article>
+      <button className="sheet-primary-link sheet-primary-button refresh-transactions" onClick={() => void loadTransactions()} disabled={loading}>
+        {loading ? "Laai transaksies…" : "Verfris transaksies"} <RefreshCw className={loading ? "spin" : ""} />
+      </button>
+      {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+      {error && <p className="form-error">{error}</p>}
+      {loading ? (
+        <p className="loading-line"><RefreshCw className="spin" /> Laai kroegtransaksies…</p>
+      ) : transactions.length ? (
+        <div className="bar-transaction-list">
+          {transactions.map((transaction) => {
+            const defaultMethod = transaction.payment?.method === "event_balance" ? "wallet" : "card";
+            const activeMethod = refundMethod[transaction.id] || defaultMethod;
+            const refundOpen = activeRefundId === transaction.id;
+            return (
+              <article className="bar-transaction-card" key={transaction.id}>
+                <header>
+                  <div>
+                    <small>{new Date(transaction.created_at * 1000).toLocaleString("af-ZA")}</small>
+                    <strong>{transaction.order_code || `Transaksie #${transaction.id}`}</strong>
+                    <span>{transaction.location_name} · {transaction.operator_name || "Onbekende kassier"}</span>
+                  </div>
+                  <b>R {(transaction.total_cents / 100).toFixed(2)}</b>
+                </header>
+                <div className="bar-transaction-meta">
+                  <span>{paymentLabel(transaction)}</span>
+                  <span>{transaction.customer_name || "Walk-in"}</span>
+                  {transaction.refunded_cents > 0 && <span>Refunds: R {(transaction.refunded_cents / 100).toFixed(2)}</span>}
+                </div>
+                <ul className="bar-item-list">
+                  {transaction.items.map((item) => (
+                    <li key={item.id}>
+                      <span>{item.name}</span>
+                      <em>{item.qty} × R {(item.unit_price_cents / 100).toFixed(2)}</em>
+                    </li>
+                  ))}
+                </ul>
+                {transaction.refunds.length > 0 && (
+                  <div className="refund-history">
+                    {transaction.refunds.map((refund) => (
+                      <small key={refund.id}>{refund.method} · R {(refund.amount_cents / 100).toFixed(2)} · {refund.status}</small>
+                    ))}
+                  </div>
+                )}
+                {canRefund && transaction.refundable_cents > 0 && (
+                  <>
+                    <button className="refund-toggle" onClick={() => setActiveRefundId(refundOpen ? null : transaction.id)}>
+                      {refundOpen ? "Maak refund toe" : "Refund transaksie"}
+                    </button>
+                    {refundOpen && (
+                      <div className="refund-panel">
+                        <div className="refund-form-grid">
+                          <label>Bedrag
+                            <input value={refundAmount[transaction.id] ?? (transaction.refundable_cents / 100).toFixed(2)} inputMode="decimal" onChange={(event) => setRefundAmount((current) => ({ ...current, [transaction.id]: event.target.value }))} />
+                          </label>
+                          <label>Metode
+                            <select value={activeMethod} onChange={(event) => setRefundMethod((current) => ({ ...current, [transaction.id]: event.target.value }))}>
+                              <option value="wallet">Terug na beursie</option>
+                              <option value="card">Yoco-kaart refund</option>
+                            </select>
+                          </label>
+                        </div>
+                        {activeMethod === "card" && <p className="provider-note">Kaart-refunds word as Yoco-opvolg aangeteken totdat die live Yoco refund-koppeling klaar getoets is.</p>}
+                        <label>Rede vir refund
+                          <textarea value={refundReason[transaction.id] || ""} onChange={(event) => setRefundReason((current) => ({ ...current, [transaction.id]: event.target.value }))} placeholder="Byvoorbeeld: verkeerde item, duplikaat, kassier-fout" />
+                        </label>
+                        <button className="refund-submit" disabled={busyRefundId === transaction.id} onClick={() => void submitRefund(transaction)}>
+                          {busyRefundId === transaction.id ? "Stoor refund…" : "Stoor refund"}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState icon={<Activity />} title="Geen kroegtransaksies gevind nie" text="Sodra kroegverkope deur POS V1 loop, sal die laaste transaksies hier verskyn." />
+      )}
+    </div>
+  );
+}
+
 function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey: string; user: AppUser; tickets: AppTicket[]; wallets: AppWallet[]; onClose: () => void }) {
   const moduleInfo = appModules.find((item) => item.key === moduleKey);
   const ModuleIcon = moduleInfo?.icon;
@@ -1075,21 +1679,188 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
           <FamilyFlow />
         ) : moduleKey === "wallet" ? (
           <WalletFlow wallets={wallets} />
+        ) : requestModuleDetails[moduleKey] ? (
+          <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
         ) : (
-          <>
-            <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
-            <p className="eyebrow">Skou-app</p>
-            <h2>{moduleInfo?.title || "Module"}</h2>
-            <p>{moduleInfo?.detail}</p>
-            <div className="handoff">
-              <strong>Word veilig gekoppel</strong>
-              <p>Die aansig is beskikbaar; die finale live data en bedienerregte word nou aan die bestaande Skou-stelsel gekoppel.</p>
-            </div>
-          </>
+          <ConnectedModulePanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         )}
       </section>
     </div>
   );
+}
+
+function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: string; moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const panel = modulePanels[moduleKey];
+  const status = moduleInfo?.status || (moduleInfo?.live ? "live" : "coming");
+  const statusText = status === "live" ? "Hierdie funksie werk reeds in die app." : status === "admin" ? "Hierdie funksie gebruik tans die bestaande web/admin skerm of vereis admin-toegang." : "Hierdie funksie is gemerk as kom binnekort.";
+  return (
+    <>
+      <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+      <p className="eyebrow">Skou-app</p>
+      <h2>{moduleInfo?.title || "Module"}</h2>
+      <p className="module-availability" data-status={status}>{statusText}</p>
+      <p>{panel?.status || moduleInfo?.detail}</p>
+      {(moduleInfo?.href || panel?.href) && (
+        <a className="sheet-primary-link module-launch" href={moduleInfo?.href || panel?.href}>
+          {panel?.action || "Maak live skerm oop"} <ArrowRight />
+        </a>
+      )}
+      <div className="module-status-grid">
+        <section>
+          <strong>Reeds bruikbaar</strong>
+          <ul>{(panel?.ready || ["Menu en access control is beskikbaar."]).map((item) => <li key={item}>{item}</li>)}</ul>
+        </section>
+        <section>
+          <strong>Volgende koppeling</strong>
+          <ul>{(panel?.next || ["Finale live data en aksies word aan die bestaande Skou-stelsel gekoppel."]).map((item) => <li key={item}>{item}</li>)}</ul>
+        </section>
+      </div>
+      <div className="handoff">
+        <strong>Access word reeds deur die server beheer</strong>
+        <p>As hierdie module nie vir ’n gebruiker wys nie, gee eers die toepaslike permission in Admin → Users → Access.</p>
+      </div>
+    </>
+  );
+}
+
+function ServiceRequestFlow({ moduleKey, user, moduleInfo, config }: { moduleKey: string; user: AppUser; moduleInfo?: AppModule; config: ServiceModuleConfig }) {
+  const [requests, setRequests] = useState<ServiceRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const ModuleIcon = moduleInfo?.icon || ClipboardCheck;
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api(`/api/app/service-requests?module_key=${encodeURIComponent(moduleKey)}`);
+      setRequests(result.requests || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Versoeke kon nie gelaai word nie");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    let active = true;
+    void api(`/api/app/service-requests?module_key=${encodeURIComponent(moduleKey)}`)
+      .then((result) => { if (active) setRequests(result.requests || []); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Versoeke kon nie gelaai word nie"); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [moduleKey]);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const form = new FormData(event.currentTarget);
+    const payload: Record<string, FormDataEntryValue | null> = {};
+    config.fields.forEach((field) => {
+      payload[field.key] = form.get(field.key);
+    });
+    const title = String(form.get("title") || config.title).trim();
+    try {
+      await api("/api/app/service-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          module_key: moduleKey,
+          request_type: config.requestType,
+          title,
+          contact_name: form.get("contact_name") || user.name,
+          contact_email: form.get("contact_email") || user.email || "",
+          contact_phone: form.get("contact_phone") || user.phone || "",
+          details: form.get("details"),
+          payload,
+        }),
+      });
+      event.currentTarget.reset();
+      setMessage("Dankie. Jou versoek is ontvang en sal deur die regte afdeling opgevolg word.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Die versoek kon nie gestuur word nie");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <span className="detail-icon"><ModuleIcon /></span>
+      <p className="eyebrow">{config.eyebrow}</p>
+      <h2>{config.title}</h2>
+      <p className="request-intro">{config.intro}</p>
+      {moduleInfo?.href && (
+        <a className="sheet-primary-link module-launch secondary-launch" href={moduleInfo.href}>
+          Maak bestaande admin/web skerm oop <ArrowRight />
+        </a>
+      )}
+      <form className="service-request-form" onSubmit={submit}>
+        <div className="form-section-heading"><span>1</span><div><strong>Versoek</strong><small>Gee genoeg detail vir die kantoor of afdeling.</small></div></div>
+        <label>Opskrif<input name="title" required defaultValue={config.title} /></label>
+        {config.fields.map((field) => <ServiceFieldInput key={field.key} field={field} />)}
+        <label>Volledige besonderhede<textarea name="details" required placeholder="Skryf hier presies wat moet gebeur, enige datums, persone, bedrae of notas." /></label>
+        <div className="form-section-heading"><span>2</span><div><strong>Kontak</strong><small>Hiermee kan die regte persoon opvolg.</small></div></div>
+        <div className="venue-form-grid">
+          <label>Kontakpersoon<input name="contact_name" required defaultValue={user.name} /></label>
+          <label>Selfoonnommer<input name="contact_phone" required inputMode="tel" defaultValue={user.phone || ""} /></label>
+        </div>
+        <label>E-posadres<input name="contact_email" type="email" defaultValue={user.email || ""} /></label>
+        {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+        {error && <p className="form-error">{error}</p>}
+        <button className="app-primary" disabled={busy}>{busy ? <RefreshCw className="spin" /> : <ClipboardCheck />}{busy ? "Stuur versoek…" : config.primaryLabel || "Stuur versoek"}</button>
+      </form>
+      <section className="service-request-history">
+        <div className="section-heading"><div><p className="eyebrow">Opvolg</p><h2>My versoeke</h2></div><span>{requests.length}</span></div>
+        {loading ? <p className="loading-line"><RefreshCw className="spin" /> Laai versoeke…</p> : requests.length ? requests.map((request) => (
+          <article key={request.id}>
+            <div>
+              <small>{new Date(request.created_at * 1000).toLocaleString("af-ZA")}</small>
+              <strong>{request.title}</strong>
+              <p>{request.details}</p>
+              {request.admin_notes && <em>Admin: {request.admin_notes}</em>}
+            </div>
+            <span data-status={request.status}>{serviceStatusLabel(request.status)}</span>
+          </article>
+        )) : <EmptyState icon={<ModuleIcon />} title="Nog geen versoeke nie" text="Sodra jy ’n versoek stuur, bly die opvolg hier in die app." />}
+      </section>
+    </>
+  );
+}
+
+function ServiceFieldInput({ field }: { field: ServiceField }) {
+  const type = field.type || "text";
+  if (type === "textarea") {
+    return (
+      <label>{field.label}
+        <textarea name={field.key} required={field.required} placeholder={field.placeholder} />
+      </label>
+    );
+  }
+  if (type === "select") {
+    return (
+      <label>{field.label}
+        <select name={field.key} required={field.required} defaultValue="">
+          <option value="">Kies ’n opsie</option>
+          {(field.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </label>
+    );
+  }
+  return (
+    <label>{field.label}
+      <input name={field.key} type={type} required={field.required} placeholder={field.placeholder} inputMode={type === "tel" ? "tel" : type === "number" ? "numeric" : undefined} />
+    </label>
+  );
+}
+
+function serviceStatusLabel(status: string) {
+  if (status === "approved") return "Goedgekeur";
+  if (status === "declined") return "Afgekeur";
+  if (status === "cancelled") return "Gekanselleer";
+  if (status === "completed") return "Voltooi";
+  if (status === "reviewing") return "Word hersien";
+  return "Ontvang";
 }
 
 function TicketsFlow({ user, tickets, standalone = false }: { user: AppUser; tickets: AppTicket[]; standalone?: boolean }) {
@@ -1200,7 +1971,7 @@ function TicketPurchase({ user }: { user: AppUser }) {
       });
       const code = order.order?.short_code;
       if (!code) throw new Error("Die bestelling kon nie geskep word nie");
-      const payment = await api("/api/payments/yoco/intent", { method: "POST", body: JSON.stringify({ code }) });
+      const payment = await api("/api/payments/yoco/intent", { method: "POST", body: JSON.stringify({ code, app_return: true }) });
       if (!payment.redirect_url) throw new Error("Yoco-betaling kon nie begin nie");
       window.location.assign(payment.redirect_url);
     } catch (err) {

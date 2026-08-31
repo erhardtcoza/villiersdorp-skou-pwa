@@ -4,7 +4,7 @@ Updated: 27 August 2026
 
 ## Executive status
 
-The live PWA now uses the existing Skou authentication, roles, verified account linkage, family records, issued tickets and wallet records. Visitors can buy tickets and start secure Yoco wallet top-ups inside the app. More specialised vendor, staff and committee modules are still being integrated from the prototype.
+The live PWA now uses the existing Skou authentication, roles, verified account linkage, family records, issued tickets and wallet records. Visitors can buy tickets and start secure Yoco wallet top-ups inside the app. Staff and committee users now see protected modules according to assigned server-side permissions, including Kroeg transaction review and controlled refunds. More specialised vendor, staff and committee modules are still being integrated from the prototype.
 
 Wallet funds are credited only after a signed Yoco webhook confirms the exact payment. A low-value real Yoco wallet top-up and ticket purchase still require user-led end-to-end confirmation before the flow is treated as operationally signed off.
 
@@ -13,9 +13,9 @@ Wallet funds are credited only after a signed Yoco webhook confirms the exact pa
 | Area | Current state | Next production step |
 |---|---|---|
 | PWA shell and branding | Implemented | Final accessibility and device testing |
-| Role-based menus | Implemented | Replace test role switcher with authenticated role claims |
-| Committee super admin | Implemented in UI | Enforce on every API endpoint |
-| Staff permissions | Functional prototype | Load grants from backend and audit changes |
+| Role-based menus | Implemented | Confirm each live user sees only assigned modules |
+| Committee access model | Implemented | Assign real committee/department access |
+| Staff permissions | Live admin controls | Audit every sensitive API before broad delegation |
 | Family management | Live account records | Add invitations and transfer acceptance |
 | Ticket assignment | Live existing ticket records | Add invitation-based transfers |
 | Ticket display | Live issued QR tickets | Complete physical gate-device testing |
@@ -23,10 +23,10 @@ Wallet funds are credited only after a signed Yoco webhook confirms the exact pa
 | Programme | Functional prototype | Load event programme API and push reminders |
 | Show map | Functional prototype | Import official mapped polygons and coordinates |
 | Phone location | Demonstrated | Calibrate GPS-to-map positioning on the grounds |
-| Bar Wallet | Live linked balance and Yoco top-up | Confirm one low-value real top-up and reconciliation |
+| Bar Wallet | Live linked balance, Yoco top-up and wallet refund ledger | Confirm one low-value real top-up/refund and reconciliation |
 | Venue booking | Functional prototype | Connect availability, estimates and reservations |
 | Venue approvals | Functional prototype | Persist decisions, price, conditions and audit trail |
-| Staff POS | Functional simulation | Connect products, tills, orders, payments and cash-up |
+| Staff POS | Linked entry point plus Kroeg transaction review | Complete POS app merge and live cash-up views |
 | Gate Control | Functional simulation | Connect ticket validation and offline movement queue |
 | Operations | Functional dashboard | Connect gate, POS and device heartbeat data |
 | Stall applications | Functional prototype | Connect existing vendor/application records |
@@ -65,7 +65,9 @@ Detailed live vendor forms and public vendor-directory integration remain to be 
 
 ### Staff
 
-- Receive only committee-assigned module access
+- Receive only assigned module access
+- Review recent Kroeg transactions when granted bar access
+- Record a wallet refund immediately when granted refund access
 - Operate the POS simulation
 - Scan tickets IN or OUT in the Gate Control simulation
 - Review stall or horse applications when assigned
@@ -74,7 +76,7 @@ Detailed live vendor forms and public vendor-directory integration remain to be 
 
 ### Committee
 
-- Super administrator access across all modules
+- Admin/manager accounts have full operational access; committee users receive access by assigned department/permission
 - Create and suspend staff accounts in the prototype
 - Grant or revoke individual staff permissions
 - Review venue requests and decide pricing
@@ -85,8 +87,9 @@ Detailed live vendor forms and public vendor-directory integration remain to be 
 
 ## Business rules captured
 
-- Committee members are super administrators.
-- Staff are restricted to explicitly assigned functions.
+- Admin/manager users are operational super administrators.
+- Committee and staff users are restricted to explicitly assigned functions.
+- Kroeg refunds are restricted to assigned bar-management users; ordinary committee access is not enough.
 - Ticket purchaser and ticket holder are separate concepts.
 - Only eligible adults can receive Bar Wallet permissions.
 - The Bar Wallet must use an append-only transaction ledger.

@@ -9,7 +9,7 @@ The PWA is the test and implementation shell for visitor, vendor, staff and comm
 - Live PWA: <https://app.villiersdorpskou.co.za>
 - Original visual prototype: <https://villiersdorp-skou-pwa.erhardte.chatgpt.site>
 - Event: Villiersdorp Skou, 23–24 October 2026
-- Status: live authentication and role shell with connected tickets, family records and wallets; remaining prototype modules are being connected incrementally
+- Status: live authentication and role shell with connected tickets, family records, wallets, Yoco top-ups, ticket purchases, venue requests and authorised Kroeg transaction/refund review; remaining prototype modules are being connected incrementally
 
 ## Product structure
 
@@ -17,8 +17,8 @@ The PWA is the test and implementation shell for visitor, vendor, staff and comm
 |---|---|
 | Visitor | Tickets, family, programme, map, venue requests and Bar Wallet prototype |
 | Vendor | Vendor profile, application, team, passes, programme, map and venue requests |
-| Staff | Only modules explicitly assigned by a committee member |
-| Committee | Super administrator access to every module and approval workflow |
+| Staff | Only modules explicitly assigned by an administrator/authorised access manager |
+| Committee | Committee/department modules assigned per person; admin/manager accounts retain full operational access |
 
 Staff permissions currently cover:
 
@@ -29,6 +29,9 @@ Staff permissions currently cover:
 - Meetings
 - Gate control
 - Operations reports
+- Kroeg transactions
+- Kroeg refunds
+- Department membership across Skou Bestuur, Kroeg, Perde, Vermaak, Gronde, Uitstallers, Hekke, Bemarking and Finansies
 
 ## Implemented prototype modules
 
@@ -41,7 +44,7 @@ Staff permissions currently cover:
 - Interactive show map with categories and phone-location demonstration
 - Current events, grounds contacts and venue booking requests
 - Venue approval, committee price and provisional reservation workflow
-- Staff accounts and granular permission assignment
+- Staff/committee accounts and granular permission assignment
 - Point of Sale basket, payment choices and supervisor flow
 - Gate scanning simulation with IN/OUT movements and live counts
 - Operations dashboard for attendance, sales and device health
@@ -60,12 +63,14 @@ The production PWA now uses the existing Skou Worker as its system of record for
 - Automatic ticket and wallet matching by verified contact details
 - Family records and ticket-holder assignment
 - Ticket purchase and secure QR hand-off
+- Wallet top-ups through Yoco-hosted checkout
+- Venue booking request capture and history
+- Authorised Kroeg transaction review and audited refund capture
 
 The remaining prototype workflows require backend integration before production use:
 
 - Ticket transfer, WhatsApp delivery and Apple/Google Wallet passes
-- Yoco payments, refunds and webhooks
-- Shared Bar Wallet financial ledger
+- Automatic Yoco provider refunds after the exact live provider flow is confirmed
 - Real gate scan validation and offline synchronisation
 - Vendor and horse application records
 - Venue availability and committee approvals
