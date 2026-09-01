@@ -380,7 +380,7 @@ const appModules: AppModule[] = [
     detail: "Kombuisverkope en toekomstige afdelings",
     icon: Store,
     roles: ["staff", "committee"],
-    permissions: ["pos_sales", "bar_pos"],
+    permissions: ["kitchen_pos", "pos_sales"],
     live: false,
     status: "coming",
   },
