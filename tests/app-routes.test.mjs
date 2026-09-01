@@ -64,10 +64,14 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /api\("\/api\/app\/staff\/wallets\/topup"/);
   assert.doesNotMatch(source, /key:\s*"wallet-topup"[\s\S]{0,260}href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/bar\/topup"/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?permissions:\s*\["kitchen_pos"\]/);
-  assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
-  assert.match(source, /href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=hek"/);
-  assert.match(source, /href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kroeg"/);
-  assert.match(source, /href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/scan"/);
+  assert.match(source, /key:\s*"gate-pos"[\s\S]*?target:\s*"pos"[\s\S]*?area:\s*"hek"/);
+  assert.match(source, /key:\s*"bar-pos"[\s\S]*?target:\s*"pos"[\s\S]*?area:\s*"kroeg"/);
+  assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?target:\s*"pos"[\s\S]*?area:\s*"kombuis"/);
+  assert.match(source, /key:\s*"gate-scanner"[\s\S]*?target:\s*"scan"/);
+  assert.match(source, /api\("\/api\/app\/pos\/bridge"/);
+  assert.match(source, /window\.location\.href = result\.launch_url/);
+  assert.doesNotMatch(source, /https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=/);
+  assert.doesNotMatch(source, /https:\/\/tickets\.villiersdorpskou\.co\.za\/scan/);
   assert.match(source, /href:\s*department\.launch_url \|\| undefined/);
   const fallbackPosOptions = source.slice(source.indexOf("const posLaunchOptions:"), source.indexOf("const appModules:"));
   const fallbackKitchenOption = fallbackPosOptions.slice(fallbackPosOptions.indexOf('key: "kitchen-pos"'), fallbackPosOptions.indexOf('key: "gate-scanner"'));
@@ -191,14 +195,14 @@ test("app health route checks the app backend and ticket catalogue", async () =>
   assert.match(workerSource, /payload\.checks\.ticket_catalogue/);
 });
 
-test("app worker leaves POS V1 and scanner sessions on the backend domain", async () => {
+test("app worker keeps POS V1 and scanner sessions inside the app domain", async () => {
   const workerSource = await readFile(path.join(root, "worker/index.ts"), "utf8");
 
   assert.match(workerSource, /async function proxyBackend\(request: Request, upstreamPath\?: string\)/);
-  assert.doesNotMatch(workerSource, /url\.pathname === "\/pos-terminal"/);
-  assert.doesNotMatch(workerSource, /url\.pathname === "\/scan-terminal"/);
-  assert.doesNotMatch(workerSource, /url\.pathname\.startsWith\("\/pos\/"\)/);
-  assert.doesNotMatch(workerSource, /url\.pathname\.startsWith\("\/scan\/"\)/);
-  assert.doesNotMatch(workerSource, /url\.pathname\.startsWith\("\/api\/auth\/"\)/);
-  assert.doesNotMatch(workerSource, /proxiedHeaders\.set\("location",\s*rewritten\)/);
+  assert.match(workerSource, /url\.pathname === "\/app"/);
+  assert.match(workerSource, /url\.pathname === "\/scan"/);
+  assert.match(workerSource, /url\.pathname\.startsWith\("\/pos\/"\)/);
+  assert.match(workerSource, /url\.pathname\.startsWith\("\/scan\/"\)/);
+  assert.match(workerSource, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(workerSource, /proxiedHeaders\.set\("location",\s*rewritten\)/);
 });

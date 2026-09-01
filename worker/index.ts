@@ -21,7 +21,8 @@ interface ExecutionContext {
 
 async function proxyBackend(request: Request, upstreamPath?: string): Promise<Response> {
   const url = new URL(request.url);
-  const upstream = new URL(upstreamPath || `${url.pathname}${url.search}`, "https://tickets.villiersdorpskou.co.za");
+  const backendOrigin = "https://tickets.villiersdorpskou.co.za";
+  const upstream = new URL(upstreamPath || `${url.pathname}${url.search}`, backendOrigin);
   const headers = new Headers(request.headers);
   headers.set("host", upstream.host);
   const response = await fetch(new Request(upstream, {
@@ -32,6 +33,11 @@ async function proxyBackend(request: Request, upstreamPath?: string): Promise<Re
   }));
   const proxiedHeaders = new Headers(response.headers);
   proxiedHeaders.set("cache-control", "no-store");
+  const location = proxiedHeaders.get("location");
+  if (location) {
+    const rewritten = location.startsWith(backendOrigin) ? location.slice(backendOrigin.length) || "/" : location;
+    proxiedHeaders.set("location", rewritten);
+  }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers: proxiedHeaders });
 }
 
@@ -121,11 +127,9 @@ const worker = {
       });
     }
 
-    const isAppApi = url.pathname.startsWith("/api/app/");
-    const isTicketCatalogue = url.pathname.startsWith("/api/public/events/") && request.method === "GET";
-    const isTicketOrder = url.pathname === "/api/public/orders/create" && request.method === "POST";
-    const isTicketPayment = url.pathname === "/api/payments/yoco/intent" && request.method === "POST";
-    if (isAppApi || isTicketCatalogue || isTicketOrder || isTicketPayment) {
+    const isBackendPage = url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/pos/") || url.pathname.startsWith("/scan/");
+    const isBackendApi = url.pathname.startsWith("/api/");
+    if (isBackendPage || isBackendApi) {
       return proxyBackend(request);
     }
 

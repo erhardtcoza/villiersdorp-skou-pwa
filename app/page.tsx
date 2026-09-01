@@ -112,6 +112,9 @@ type PosLaunchOption = {
   title: string;
   detail: string;
   href?: string;
+  target?: "pos" | "scan";
+  area?: string;
+  location_id?: number | null;
   status: "live" | "coming";
   badge: string;
 };
@@ -268,7 +271,8 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "gate-pos",
     title: "Hek POS",
     detail: "Kaartjieverkope, wristband verkope en hek-dagafsluiting.",
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=hek",
+    target: "pos",
+    area: "hek",
     status: "live",
     badge: "HEK",
   },
@@ -276,7 +280,8 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "bar-pos",
     title: "Kroeg POS",
     detail: "Kroegverkope met Yoco, kontant en beursiebetalings.",
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=kroeg",
+    target: "pos",
+    area: "kroeg",
     status: "live",
     badge: "KROEG",
   },
@@ -291,6 +296,8 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "kitchen-pos",
     title: "Kombuis POS",
     detail: "Gereserveer vir kombuisprodukte, eie sessies en cash-up.",
+    target: "pos",
+    area: "kombuis",
     status: "coming",
     badge: "KOMBUIS",
   },
@@ -298,7 +305,7 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "gate-scanner",
     title: "Hek scan in / uit",
     detail: "Skandeer QR-kaartjies en hanteer toegang by hekke.",
-    href: "https://tickets.villiersdorpskou.co.za/scan",
+    target: "scan",
     status: "live",
     badge: "SCAN",
   },
@@ -412,7 +419,6 @@ const appModules: AppModule[] = [
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["pos_sales"],
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=hek",
     live: true,
     status: "admin",
   },
@@ -443,7 +449,6 @@ const appModules: AppModule[] = [
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["bar_pos"],
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=kroeg",
     live: true,
     status: "admin",
   },
@@ -454,7 +459,6 @@ const appModules: AppModule[] = [
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["kitchen_pos"],
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=kombuis",
     live: true,
     status: "admin",
   },
@@ -587,7 +591,6 @@ const appModules: AppModule[] = [
     icon: ScanLine,
     roles: ["staff", "committee"],
     permissions: ["gates_scan"],
-    href: "https://tickets.villiersdorpskou.co.za/scan",
     live: true,
     status: "admin",
   },
@@ -2193,6 +2196,8 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
   const [config, setConfig] = useState<AppPosConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [launching, setLaunching] = useState("");
+  const [launchError, setLaunchError] = useState("");
   const [showWalletTopup, setShowWalletTopup] = useState(false);
   const preferred = moduleKey === "bar-pos" ? "bar-pos" : moduleKey === "kitchen-pos" ? "kitchen-pos" : moduleKey === "gates" ? "gate-scanner" : "gate-pos";
   useEffect(() => {
@@ -2219,6 +2224,9 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
     title: department.title,
     detail: department.detail,
     href: department.launch_url || undefined,
+    target: "pos",
+    area: department.area,
+    location_id: department.primary_location_id,
     status: department.status === "live" ? "live" : "coming",
     badge: department.badge,
   }));
@@ -2234,6 +2242,26 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
   const liveKeys = new Set(scopedLiveOptions.map((option) => option.key));
   const fallbackAdditions = scopedFallbackOptions.filter((option) => !liveKeys.has(option.key));
   const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...fallbackAdditions] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
+  const launchPos = async (option: PosLaunchOption) => {
+    if (option.status !== "live") return;
+    setLaunching(option.key);
+    setLaunchError("");
+    try {
+      const result = await api("/api/app/pos/bridge", {
+        method: "POST",
+        body: JSON.stringify({
+          target: option.target || "pos",
+          pos_area: option.area || "hek",
+          location_id: option.location_id || undefined,
+        }),
+      });
+      window.location.href = result.launch_url;
+    } catch (err) {
+      setLaunchError(err instanceof Error ? err.message : "POS kon nie binne die app oopgemaak word nie");
+    } finally {
+      setLaunching("");
+    }
+  };
   if (showWalletTopup) return <PosWalletTopupPanel onBack={() => setShowWalletTopup(false)} />;
   return (
     <>
@@ -2246,6 +2274,7 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
       <p>Die PWA hou die menu skoon: kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling wat in die backend opgestel word. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
       {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-afdelings…</p>}
       {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Die veilige standaard-skakels bly beskikbaar.</p>}
+      {launchError && <p className="provider-note error-note">POS kon nie oopmaak nie: {launchError}</p>}
       {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}
       <div className="pos-launch-grid">
         {ordered.map((option) => (
@@ -2255,6 +2284,14 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
               <strong>{option.title}</strong>
               <small>{option.detail}</small>
               <em data-status={option.status}>Live</em>
+              <ArrowRight />
+            </button>
+          ) : option.target ? (
+            <button className="pos-launch-card" type="button" key={option.key} onClick={() => launchPos(option)} disabled={option.status !== "live" || launching === option.key}>
+              <span>{option.badge}</span>
+              <strong>{option.title}</strong>
+              <small>{option.detail}</small>
+              <em data-status={option.status}>{launching === option.key ? "Maak oop…" : option.status === "live" ? "Live" : "Kom binnekort"}</em>
               <ArrowRight />
             </button>
           ) : option.href ? (
