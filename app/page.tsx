@@ -77,6 +77,14 @@ type AppModule = {
   live?: boolean;
   status?: "live" | "admin" | "coming";
 };
+type PosLaunchOption = {
+  key: string;
+  title: string;
+  detail: string;
+  href?: string;
+  status: "live" | "coming";
+  badge: string;
+};
 type VenueRequest = {
   id: number;
   event_name: string;
@@ -176,6 +184,39 @@ const roleNames: Record<string, string> = {
   uitstaller: "Uitstaller",
 };
 const allViews: RoleView[] = ["visitor", "vendor", "staff", "committee"];
+const posLaunchOptions: PosLaunchOption[] = [
+  {
+    key: "gate-pos",
+    title: "Hek POS",
+    detail: "Kaartjieverkope, wristband verkope en hek-dagafsluiting.",
+    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=hek",
+    status: "live",
+    badge: "HEK",
+  },
+  {
+    key: "bar-pos",
+    title: "Kroeg POS",
+    detail: "Kroegverkope met Yoco, kontant en beursiebetalings.",
+    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=kroeg",
+    status: "live",
+    badge: "KROEG",
+  },
+  {
+    key: "kitchen-pos",
+    title: "Kombuis POS",
+    detail: "Gereserveer vir kombuisprodukte, eie sessies en cash-up.",
+    status: "coming",
+    badge: "KOMBUIS",
+  },
+  {
+    key: "gate-scanner",
+    title: "Hek scan in / uit",
+    detail: "Skandeer QR-kaartjies en hanteer toegang by hekke.",
+    href: "https://tickets.villiersdorpskou.co.za/scan",
+    status: "live",
+    badge: "SCAN",
+  },
+];
 const appModules: AppModule[] = [
   {
     key: "tickets",
@@ -1865,6 +1906,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
 function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey: string; user: AppUser; tickets: AppTicket[]; wallets: AppWallet[]; onClose: () => void }) {
   const moduleInfo = appModules.find((item) => item.key === moduleKey);
   const ModuleIcon = moduleInfo?.icon;
+  const isPosLauncher = ["pos", "bar-pos", "kitchen-pos", "gates"].includes(moduleKey);
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <section className="detail-sheet live-sheet" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
@@ -1880,11 +1922,53 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
           <WalletFlow wallets={wallets} />
         ) : requestModuleDetails[moduleKey] ? (
           <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
+        ) : isPosLauncher ? (
+          <PosLauncherPanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : (
           <ConnectedModulePanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         )}
       </section>
     </div>
+  );
+}
+
+function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: string; moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const preferred = moduleKey === "bar-pos" ? "bar-pos" : moduleKey === "kitchen-pos" ? "kitchen-pos" : moduleKey === "gates" ? "gate-scanner" : "gate-pos";
+  const ordered = [...posLaunchOptions].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
+  return (
+    <>
+      <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+      <p className="eyebrow">POS & toegang</p>
+      <h2>{moduleInfo?.title || "POS"}</h2>
+      <p className="module-availability" data-status={moduleInfo?.status || "admin"}>
+        Mobiele launch-pad vir personeel se verkoop- en toegangskerms.
+      </p>
+      <p>Die PWA hou die menu skoon, maar gee personeel een plek om die regte POS-afdeling oop te maak. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
+      <div className="pos-launch-grid">
+        {ordered.map((option) => (
+          option.href ? (
+            <a className="pos-launch-card" href={option.href} key={option.key}>
+              <span>{option.badge}</span>
+              <strong>{option.title}</strong>
+              <small>{option.detail}</small>
+              <em data-status={option.status}>{option.status === "live" ? "Live" : "Kom binnekort"}</em>
+              <ArrowRight />
+            </a>
+          ) : (
+            <article className="pos-launch-card disabled" key={option.key}>
+              <span>{option.badge}</span>
+              <strong>{option.title}</strong>
+              <small>{option.detail}</small>
+              <em data-status={option.status}>Kom binnekort</em>
+            </article>
+          )
+        ))}
+      </div>
+      <div className="handoff">
+        <strong>Backend-koppeling</strong>
+        <p>Hek en Kroeg gebruik reeds dieselfde POS V1 backend. Kombuis word eers live wanneer die Kombuis group/location/products in admin geskep en getoets is.</p>
+      </div>
+    </>
   );
 }
 
