@@ -48,6 +48,8 @@ test("app module permissions and native review labels stay aligned", async () =>
 
   assert.match(source, /key:\s*"pos"[\s\S]*?permissions:\s*\["pos_sales"\]/);
   assert.match(source, /key:\s*"bar-pos"[\s\S]*?permissions:\s*\["bar_pos"\]/);
+  assert.match(source, /key:\s*"wallet-topup"[\s\S]*?permissions:\s*\["pos_sales",\s*"bar_pos"\]/);
+  assert.match(source, /key:\s*"wallet-topup"[\s\S]*?href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/bar\/topup"/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?permissions:\s*\["kitchen_pos"\]/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
   const fallbackPosOptions = source.slice(source.indexOf("const posLaunchOptions:"), source.indexOf("const appModules:"));
@@ -60,6 +62,10 @@ test("app module permissions and native review labels stay aligned", async () =>
     assert.equal(moduleBlock?.[1], "live", `${key} should be marked as an app-native live workflow`);
   }
   assert.match(source, /const staffReviewScopes:[\s\S]*"horse-processing"[\s\S]*"venue-approvals"[\s\S]*"rental-approvals"[\s\S]*applications/);
+  assert.match(source, /api\("\/api\/app\/staff\/horse-applications\?limit=50"\)/);
+  assert.match(source, /moduleKey === "horse-processing" && staffReview[\s\S]*<HorseApplicationsPanel/);
+  assert.match(source, /fallbackAdditions = scopedFallbackOptions\.filter/);
+  assert.match(source, /moduleKey === "pos"[\s\S]*option\.key === "wallet-topup"/);
   assert.match(source, /page === "pos"[\s\S]*title="Kies POS-afdeling"[\s\S]*<PosLauncherPanel moduleKey="pos-menu" ModuleIcon=\{ScanLine\} \/>/);
   assert.match(source, /kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling/);
 });
@@ -70,6 +76,8 @@ test("native app keeps the same grouped app and POS navigation language", async 
   for (const label of ["Kaartjies & Beursie", "POS & Toegang", "Perde", "Uitstallers", "Terrein & Verhurings", "Skou-inligting", "Bestuur", "Doen perde-aansoek", "Verwerk perde-aansoeke", "My Aansoek", "Uitstallerprofiel", "Uitstallerspan", "Stalletjie-aansoeke", "Terreinbespreking", "Terreingoedkeurings", "Verhuring-goedkeuring", "Geboue", "Skoufoto’s", "Finansies", "Vergaderings", "Krymekaar & Slaglam", "Gebruikers & Rolle"]) {
     assert.match(nativeSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.match(nativeSource, /Beursie aanvulling/);
+  assert.match(nativeSource, /\/bar\/topup/);
   for (const area of ["pos_area=hek", "pos_area=kroeg", "pos_area=kombuis"]) {
     assert.match(nativeSource, new RegExp(area));
   }
@@ -87,6 +95,7 @@ test("native app keeps the same grouped app and POS navigation language", async 
   for (const deepLink of ["photos", "venue-approvals", "buildings", "finance", "meetings", "krymekaar", "users"]) {
     assert.match(nativeSource, new RegExp(`https:\\/\\/app\\.villiersdorpskou\\.co\\.za\\/\\?module=${deepLink}`));
   }
+  assert.match(nativeSource, /modules:\s*\["pos",\s*"bar-pos",\s*"wallet-topup",\s*"kitchen-pos",\s*"gates",\s*"bar",\s*"operations"\]/);
   assert.match(nativeSource, /roles:\s*\["staff",\s*"committee"\],\s*modules:\s*\["finance",\s*"meetings",\s*"krymekaar",\s*"users"\]/);
 });
 

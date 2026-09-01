@@ -195,6 +195,31 @@ type BarTransaction = {
   items: BarTransactionItem[];
   refunds: BarRefund[];
 };
+type HorseBackendApplication = {
+  id: number;
+  event_id: number;
+  status: string;
+  stud_name: string;
+  contact_name: string;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  membership_agreed: boolean;
+  notes?: string | null;
+  exhibitor_id?: number | null;
+  portal_status?: string | null;
+  invoice_id?: number | null;
+  invoice_no?: string | null;
+  invoice_status?: string | null;
+  total_cents: number;
+  number_deposit_cents: number;
+  deposit_refunded_at?: number | null;
+  reviewed_at?: number | null;
+  approval_email_sent_at?: number | null;
+  approval_whatsapp_sent_at?: number | null;
+  created_at: number;
+  updated_at: number;
+};
 
 const roleNames: Record<string, string> = {
   admin: "Administrateur",
@@ -225,6 +250,14 @@ const posLaunchOptions: PosLaunchOption[] = [
     href: "https://tickets.villiersdorpskou.co.za/app?pos_area=kroeg",
     status: "live",
     badge: "KROEG",
+  },
+  {
+    key: "wallet-topup",
+    title: "Beursie aanvulling",
+    detail: "Laai of skep ’n gas se skoubeursie met kontant of kaart by die POS.",
+    href: "https://tickets.villiersdorpskou.co.za/bar/topup",
+    status: "live",
+    badge: "BEURSIE",
   },
   {
     key: "kitchen-pos",
@@ -363,6 +396,17 @@ const appModules: AppModule[] = [
     permissions: ["bar_transactions", "bar_refunds"],
     live: true,
     status: "live",
+  },
+  {
+    key: "wallet-topup",
+    title: "Beursie aanvulling",
+    detail: "Laai/skep gaste se skoubeursies met kontant of kaart",
+    icon: WalletCards,
+    roles: ["staff", "committee"],
+    permissions: ["pos_sales", "bar_pos"],
+    href: "https://tickets.villiersdorpskou.co.za/bar/topup",
+    live: true,
+    status: "admin",
   },
   {
     key: "bar-pos",
@@ -558,7 +602,7 @@ const appModuleGroups: AppModuleGroup[] = [
     detail: "Hek, kroeg, kombuis en scan workflows vir personeel.",
     icon: ScanLine,
     roles: ["staff", "committee"],
-    modules: ["pos", "bar-pos", "kitchen-pos", "gates", "bar-transactions", "reports"],
+    modules: ["pos", "bar-pos", "wallet-topup", "kitchen-pos", "gates", "bar-transactions", "reports"],
   },
   {
     key: "horses",
@@ -668,6 +712,12 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     ready: ["Open live POS vir kroegverkope", "Yoco/manual/wallet betalings bly server-side", "Kroeg transaksies en refunds het ’n aparte app skerm"],
     next: ["Launch direk in Main Bar/Kroeg konteks", "Maak produkfilters app-native", "Koppel real Yoco refunds"],
     action: "Maak Kroeg POS oop",
+  },
+  "wallet-topup": {
+    status: "Beursie-aanvulling gebruik die bestaande operateur-skerm waar personeel ’n gas se beursie kan soek/skep en met kontant of kaart top-up.",
+    ready: ["Open live beursie topup skerm", "Soek per wallet ID of selfoon", "Skep nuwe skoubeursie vir gaste", "Kontant/kaart topups bly op die backend geaudit"],
+    next: ["Maak NFC scan direk app-native", "Koppel Yoco terminal topup onderskeid duideliker", "Wys laaste topups in app dashboard"],
+    action: "Maak beursie aanvulling oop",
   },
   applications: {
     status: "Uitstaller-, span- en hekpasversoeke kan nou in die app hersien word. Formele staanplektoekenning en fakture bly as sekondêre admin-opvolg beskikbaar.",
@@ -2094,6 +2144,8 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
           <WalletFlow wallets={wallets} />
         ) : requestModuleDetails[moduleKey] ? (
           <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
+        ) : moduleKey === "horse-processing" && staffReview ? (
+          <HorseApplicationsPanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : staffReview ? (
           <StaffRequestReviewPanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} config={staffReview} />
         ) : isPosLauncher ? (
@@ -2139,16 +2191,17 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
     badge: department.badge,
   }));
   const optionMatchesModule = (option: PosLaunchOption) => {
-    if (moduleKey === "bar-pos") return option.key === "bar-pos";
+    if (moduleKey === "bar-pos") return option.key === "bar-pos" || option.key === "wallet-topup";
     if (moduleKey === "kitchen-pos") return option.key === "kitchen-pos";
     if (moduleKey === "gates") return option.key === "gate-scanner";
-    if (moduleKey === "pos") return option.key === "gate-pos" || option.key === "gate-scanner";
+    if (moduleKey === "pos") return option.key === "gate-pos" || option.key === "gate-scanner" || option.key === "wallet-topup";
     return true;
   };
   const scopedLiveOptions = liveOptions.filter(optionMatchesModule);
   const scopedFallbackOptions = posLaunchOptions.filter(optionMatchesModule);
-  const hasScanner = scopedLiveOptions.some((option) => option.key === "gate-scanner");
-  const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...(hasScanner ? [] : scopedFallbackOptions.filter((option) => option.key === "gate-scanner"))] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
+  const liveKeys = new Set(scopedLiveOptions.map((option) => option.key));
+  const fallbackAdditions = scopedFallbackOptions.filter((option) => !liveKeys.has(option.key));
+  const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...fallbackAdditions] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
   return (
     <>
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
@@ -2219,6 +2272,99 @@ function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey
         <strong>Access word reeds deur die server beheer</strong>
         <p>As hierdie module nie vir ’n gebruiker wys nie, gee eers die toepaslike permission in Admin → Users → Access.</p>
       </div>
+    </>
+  );
+}
+
+function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const [applications, setApplications] = useState<HorseBackendApplication[]>([]);
+  const [eventName, setEventName] = useState("");
+  const [settings, setSettings] = useState<Record<string, unknown>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    setWarning("");
+    try {
+      const result = await api("/api/app/staff/horse-applications?limit=50");
+      setApplications(result.applications || []);
+      setEventName(result.event?.name || "");
+      setSettings(result.settings || {});
+      setWarning(result.warning || "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Perde-aansoeke kon nie gelaai word nie");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void load();
+    });
+    return () => { active = false; };
+  }, [load]);
+  return (
+    <>
+      <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+      <p className="eyebrow">Perde</p>
+      <h2>Verwerk perde-aansoeke</h2>
+      <p className="request-intro">Hierdie lys kom direk van die bestaande perde-backend af. Goedkeuring, fakture, klasse en deposito’s bly vir nou op die bestaande perde-admin sodat ons nie werkende verwerking dupliseer nie.</p>
+      {moduleInfo?.href && (
+        <a className="sheet-primary-link module-launch secondary-launch" href={moduleInfo.href}>
+          Maak bestaande perde-admin oop <ArrowRight />
+        </a>
+      )}
+      {eventName && <p className="provider-note">Gekoppel aan: {eventName}</p>}
+      {typeof settings.is_open !== "undefined" && (
+        <p className="provider-note">Aansoeke is tans {Number(settings.is_open) ? "oop" : "gesluit"}{settings.closing_date ? ` · sluit ${String(settings.closing_date)}` : ""}</p>
+      )}
+      {warning && <p className="provider-note">{warning}</p>}
+      {error && <p className="form-error">{error}</p>}
+      {loading ? (
+        <p className="loading-line"><RefreshCw className="spin" /> Laai bestaande perde-aansoeke…</p>
+      ) : applications.length ? (
+        <section className="staff-review-list">
+          {applications.map((application) => (
+            <article key={application.id} className="staff-review-card">
+              <div className="staff-review-head">
+                <div>
+                  <small>#{application.id} · {new Date(application.created_at * 1000).toLocaleString("af-ZA")}</small>
+                  <strong>{application.stud_name || application.contact_name || "Perde-aansoek"}</strong>
+                  <p>{application.contact_name}{application.phone ? ` · ${application.phone}` : ""}{application.whatsapp ? ` · WhatsApp ${application.whatsapp}` : ""}{application.email ? ` · ${application.email}` : ""}</p>
+                </div>
+                <span data-status={application.status}>{serviceStatusLabel(application.status)}</span>
+              </div>
+              {application.notes && <p className="staff-review-detail">{application.notes}</p>}
+              <div className="module-status-grid">
+                <section>
+                  <strong>Faktuur</strong>
+                  <ul>
+                    <li>{application.invoice_no || "Nog geen faktuur gekoppel nie"}</li>
+                    <li>Status: {application.invoice_status || "—"}</li>
+                    <li>Totaal: R{(application.total_cents / 100).toFixed(2)}</li>
+                  </ul>
+                </section>
+                <section>
+                  <strong>Verwerking</strong>
+                  <ul>
+                    <li>Lid bevestig: {application.membership_agreed ? "Ja" : "Nee"}</li>
+                    <li>Portal: {application.portal_status || "—"}</li>
+                    <li>Goedkeuring e-pos: {application.approval_email_sent_at ? "gestuur" : "nog nie"}</li>
+                  </ul>
+                </section>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : (
+        <EmptyState icon={ModuleIcon ? <ModuleIcon /> : <ClipboardCheck />} title="Geen perde-aansoeke gevind nie" text="Daar is tans geen bestaande perde-aansoeke vir die aktiewe skou nie, of jou gebruiker het nie die nodige perde-regte nie." />
+      )}
+      <button className="sheet-secondary" onClick={() => void load()} disabled={loading}>
+        <RefreshCw className={loading ? "spin" : ""} /> Herlaai perde-aansoeke
+      </button>
     </>
   );
 }
