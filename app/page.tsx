@@ -230,8 +230,7 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "kitchen-pos",
     title: "Kombuis POS",
     detail: "Gereserveer vir kombuisprodukte, eie sessies en cash-up.",
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=kombuis",
-    status: "live",
+    status: "coming",
     badge: "KOMBUIS",
   },
   {

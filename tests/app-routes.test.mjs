@@ -46,6 +46,11 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /key:\s*"bar-pos"[\s\S]*?permissions:\s*\["bar_pos"\]/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?permissions:\s*\["kitchen_pos"\]/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
+  const fallbackPosOptions = source.slice(source.indexOf("const posLaunchOptions:"), source.indexOf("const appModules:"));
+  const fallbackKitchenOption = fallbackPosOptions.slice(fallbackPosOptions.indexOf('key: "kitchen-pos"'), fallbackPosOptions.indexOf('key: "gate-scanner"'));
+  assert.match(fallbackKitchenOption, /status:\s*"coming"/);
+  assert.doesNotMatch(fallbackKitchenOption, /href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
+  assert.doesNotMatch(fallbackKitchenOption, /status:\s*"live"/);
   for (const key of ["applications", "horse-processing", "venue-approvals", "rental-approvals"]) {
     const moduleBlock = source.match(new RegExp(`key:\\s*"${key}"[\\s\\S]*?status:\\s*"([^"]+)"`));
     assert.equal(moduleBlock?.[1], "live", `${key} should be marked as an app-native live workflow`);
