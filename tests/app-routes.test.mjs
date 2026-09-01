@@ -40,6 +40,18 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /const staffReviewScopes:[\s\S]*"horse-processing"[\s\S]*"venue-approvals"[\s\S]*"rental-approvals"[\s\S]*applications/);
 });
 
+test("native app keeps the same grouped app and POS navigation language", async () => {
+  const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
+
+  for (const label of ["Kaartjies & Beursie", "POS & Toegang", "Perde", "Terrein & Verhurings", "Skou-inligting"]) {
+    assert.match(nativeSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  for (const area of ["pos_area=hek", "pos_area=kroeg", "pos_area=kombuis"]) {
+    assert.match(nativeSource, new RegExp(area));
+  }
+  assert.match(nativeSource, /grouped\.length\}\s*groepe/);
+});
+
 test("bar refund clients surface backend failures and reuse refund keys while busy", async () => {
   const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
