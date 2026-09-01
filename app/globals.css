@@ -25,26 +25,33 @@
   border-radius: 20px;
   background: #fff;
 }
-.module-group-card > header {
+.module-group-header {
+  width: 100%;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 11px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.module-group-card > header strong,
-.module-group-card > header small {
+.module-group-header strong,
+.module-group-header small {
   display: block;
 }
-.module-group-card > header strong {
+.module-group-header strong {
   font-size: 15px;
 }
-.module-group-card > header small {
+.module-group-header small {
   margin-top: 3px;
   color: var(--muted);
   font-size: 10px;
   line-height: 1.35;
 }
-.module-group-card > header b {
+.module-group-header b {
   min-width: 26px;
   height: 26px;
   display: grid;
@@ -57,6 +64,22 @@
 .module-group-card > div {
   display: grid;
   gap: 7px;
+}
+.module-more-button {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px dashed #d8c99f;
+  border-radius: 14px;
+  background: #fffaf0;
+  color: #0b432a;
+  font-size: 12px;
+  font-weight: 850;
+}
+.module-more-button svg {
+  width: 16px;
 }
 .module-card.compact {
   min-height: auto;
@@ -81,6 +104,19 @@
 }
 .module-card.compact .module-copy em {
   margin-top: 5px;
+}
+.workflow-group-page {
+  display: grid;
+  gap: 13px;
+}
+.workflow-group-page > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.workflow-option-list {
+  display: grid;
+  gap: 10px;
 }
 .live-summary {
   display: grid;

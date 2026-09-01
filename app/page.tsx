@@ -56,7 +56,7 @@ type AppHealth = {
 };
 type AuthView = "welcome" | "login" | "register" | "verify" | "forgot" | "reset-code" | "reset-password";
 type AppTab = "home" | "messages" | "calendar" | "profile";
-type AppPage = "home" | "tickets" | "venues" | "bar";
+type AppPage = "home" | "tickets" | "venues" | "bar" | "pos" | "horses" | "rentals";
 type RoleView = "visitor" | "vendor" | "staff" | "committee";
 type AppModuleGroup = {
   key: string;
@@ -1385,21 +1385,28 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
   const [tab, setTab] = useState<AppTab>("home"),
     [preview, setPreview] = useState<RoleView>(actualView),
     [selected, setSelected] = useState<string | null>(null),
-    [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : window.location.pathname === "/kroeg" ? "bar" : "home");
+    [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : pageFromBrowserPath(window.location.pathname));
   const walletTotal = wallets.reduce((sum, w) => sum + w.balance_cents, 0),
     visible = appModules.filter((item) => item.roles.includes(preview) && hasAnyPermission(user, item.permissions)),
     grouped = appModuleGroups
       .filter((group) => group.roles.includes(preview))
       .map((group) => ({ ...group, items: group.modules.map((key) => visible.find((item) => item.key === key)).filter((item): item is AppModule => Boolean(item)) }))
       .filter((group) => group.items.length > 0);
-  const pageFromPath = () => window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : window.location.pathname === "/kroeg" ? "bar" : "home";
+  const groupByKey = (key: string) => grouped.find((group) => group.key === key);
+  const pageFromPath = () => pageFromBrowserPath(window.location.pathname);
   const navigatePage = (next: AppPage, replace = false) => {
-    const path = next === "tickets" ? "/kaartjies" : next === "venues" ? "/terreinbesprekings" : next === "bar" ? "/kroeg" : "/";
+    const path = pagePath(next);
     window.history[replace ? "replaceState" : "pushState"]({}, "", path);
     setPage(next);
     setTab("home");
     setSelected(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const openGroup = (group: AppModuleGroup & { items: AppModule[] }) => {
+    if (group.key === "pos-access") navigatePage("pos");
+    else if (group.key === "horses") navigatePage("horses");
+    else if (group.key === "grounds") navigatePage("rentals");
+    else if (group.items[0]) openModule(group.items[0]);
   };
   useEffect(() => {
     const onPopState = () => setPage(pageFromPath());
@@ -1444,6 +1451,18 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
         ) : page === "bar" ? (
           <AppSubPage eyebrow="Kroeg" title="Kroegtransaksies" icon={Activity} onBack={() => navigatePage("home")}>
             <BarTransactionsPage user={user} />
+          </AppSubPage>
+        ) : page === "pos" ? (
+          <AppSubPage eyebrow="POS & Toegang" title="Hek, Kroeg, Kombuis en Scan" icon={ScanLine} onBack={() => navigatePage("home")}>
+            <WorkflowGroupPage group={groupByKey("pos-access")} onOpen={openModule} fallback="Jy het nog nie POS- of hektoegang op hierdie rekening nie." />
+          </AppSubPage>
+        ) : page === "horses" ? (
+          <AppSubPage eyebrow="Perde" title="Perde-aansoeke en verwerking" icon={Trophy} onBack={() => navigatePage("home")}>
+            <WorkflowGroupPage group={groupByKey("horses")} onOpen={openModule} fallback="Perde-aansoeke en programskakels is nog nie vir hierdie aansig beskikbaar nie." />
+          </AppSubPage>
+        ) : page === "rentals" ? (
+          <AppSubPage eyebrow="Verhurings" title="Terrein, geboue en goedkeurings" icon={Landmark} onBack={() => navigatePage("home")}>
+            <WorkflowGroupPage group={groupByKey("grounds")} onOpen={openModule} fallback="Verhurings- en terreinopsies is nog nie vir hierdie aansig beskikbaar nie." />
           </AppSubPage>
         ) : tab === "home" && (
           <>
@@ -1500,7 +1519,7 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
             </div>
             <div className="module-group-list">
               {grouped.map((group) => (
-                <AppModuleGroupCard key={group.key} group={group} onOpen={openModule} />
+                <AppModuleGroupCard key={group.key} group={group} onOpen={openModule} onOpenGroup={() => openGroup(group)} />
               ))}
             </div>
           </>
@@ -1556,11 +1575,33 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
   );
 }
 
-function AppModuleGroupCard({ group, onOpen }: { group: AppModuleGroup & { items: AppModule[] }; onOpen: (item: AppModule) => void }) {
+function pageFromBrowserPath(pathname: string): AppPage {
+  if (pathname === "/kaartjies") return "tickets";
+  if (pathname === "/terreinbesprekings") return "venues";
+  if (pathname === "/kroeg") return "bar";
+  if (pathname === "/pos") return "pos";
+  if (pathname === "/perde" || pathname === "/horses") return "horses";
+  if (pathname === "/verhurings") return "rentals";
+  return "home";
+}
+
+function pagePath(page: AppPage) {
+  if (page === "tickets") return "/kaartjies";
+  if (page === "venues") return "/terreinbesprekings";
+  if (page === "bar") return "/kroeg";
+  if (page === "pos") return "/pos";
+  if (page === "horses") return "/perde";
+  if (page === "rentals") return "/verhurings";
+  return "/";
+}
+
+function AppModuleGroupCard({ group, onOpen, onOpenGroup }: { group: AppModuleGroup & { items: AppModule[] }; onOpen: (item: AppModule) => void; onOpenGroup: () => void }) {
   const GroupIcon = group.icon;
+  const previewItems = group.items.slice(0, 3);
+  const extraCount = Math.max(0, group.items.length - previewItems.length);
   return (
     <article className="module-group-card">
-      <header>
+      <button className="module-group-header" onClick={onOpenGroup}>
         <span className="module-icon">
           <GroupIcon />
         </span>
@@ -1569,13 +1610,36 @@ function AppModuleGroupCard({ group, onOpen }: { group: AppModuleGroup & { items
           <small>{group.detail}</small>
         </span>
         <b>{group.items.length}</b>
-      </header>
+      </button>
       <div>
-        {group.items.map((item) => (
+        {previewItems.map((item) => (
           <AppModuleCard key={item.key} item={item} onOpen={() => onOpen(item)} compact />
         ))}
+        {extraCount > 0 && (
+          <button className="module-more-button" onClick={onOpenGroup}>
+            Wys nog {extraCount} opsie{extraCount === 1 ? "" : "s"} <ArrowRight />
+          </button>
+        )}
       </div>
     </article>
+  );
+}
+
+function WorkflowGroupPage({ group, onOpen, fallback }: { group?: AppModuleGroup & { items: AppModule[] }; onOpen: (item: AppModule) => void; fallback: string }) {
+  if (!group) return <EmptyState icon={<ShieldCheck />} title="Geen toegang" text={fallback} />;
+  return (
+    <section className="workflow-group-page">
+      <p>{group.detail}</p>
+      <div className="workflow-option-list">
+        {group.items.map((item) => (
+          <AppModuleCard key={item.key} item={item} onOpen={() => onOpen(item)} />
+        ))}
+      </div>
+      <div className="handoff">
+        <strong>Een backend, verskillende aansigte</strong>
+        <p>Hierdie PWA wys net die aksies waarvoor jou rekening regte het. Elke aksie word steeds teen die bestaande web/backend-regte nagegaan.</p>
+      </div>
+    </section>
   );
 }
 
