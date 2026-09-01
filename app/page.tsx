@@ -57,6 +57,33 @@ type AppHealth = {
   event?: { ticket_types?: number };
   checks?: Record<string, { status?: "ok" | "warn" | "fail"; detail?: string }>;
 };
+type AppPhoto = {
+  id: number;
+  title: string;
+  caption?: string | null;
+  status: string;
+  uploader_name?: string | null;
+  file_url: string;
+  created_at: number;
+  own?: boolean;
+};
+type AppMessage = {
+  id: number;
+  direction: "incoming" | "outgoing";
+  sender_name: string;
+  recipient_name: string;
+  recipient_type: string;
+  recipient_id: number;
+  scope: string;
+  body: string;
+  created_at: number;
+};
+type AppMessageContact = {
+  type: string;
+  id: number;
+  name: string;
+  detail?: string | null;
+};
 type AuthView = "welcome" | "login" | "register" | "verify" | "forgot" | "reset-code" | "reset-password";
 type AppTab = "home" | "messages" | "calendar" | "profile";
 type AppPage = "home" | "tickets" | "venues" | "bar" | "pos" | "horses" | "rentals";
@@ -327,10 +354,11 @@ const appModules: AppModule[] = [
   {
     key: "photos",
     title: "Skoufoto’s",
-    detail: "Foto’s en albums van die Skou",
+    detail: "Laai foto’s op en sien goedgekeurde albums",
     icon: Images,
     roles: allViews,
-    status: "coming",
+    live: true,
+    status: "live",
   },
   {
     key: "wallet",
@@ -671,9 +699,9 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     action: "Maak huidige skoukaart oop",
   },
   photos: {
-    status: "Foto’s is gereserveer vir die app. Dit moet eers ’n moderation/consent flow kry voor live uploads oopgemaak word.",
-    ready: ["Menu en app plek is gereed", "Kan later albums en social media assets wys"],
-    next: ["Besluit wie mag upload", "Stoor foto's in R2", "Bou approval/moderation voordat dit publiek wys"],
+    status: "Foto-oplaaie werk nou in die app. Nuwe foto’s word veilig gestoor en wag vir goedkeuring voordat dit publiek gebruik word.",
+    ready: ["Laai foto’s op vanaf selfoon", "Stoor lêers in R2", "Wys jou eie uploads en goedgekeurde foto’s"],
+    next: ["Admin moderation queue", "Publieke albums en grootskerm slideshow", "Consent/status filters vir bemarking"],
   },
   "vendor-profile": {
     status: "Uitstallers kan nou profielveranderinge uit die app indien vir logo, Facebook, beskrywing en kontakdetails.",
@@ -950,12 +978,14 @@ async function api(path: string, init?: RequestInit) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 20000);
   let response: Response;
+  const headers = new Headers(init?.headers || {});
+  if (!(init?.body instanceof FormData) && !headers.has("content-type")) headers.set("content-type", "application/json");
   try {
     response = await fetch(path, {
       ...init,
       credentials: "same-origin",
       signal: init?.signal || controller.signal,
-      headers: { "content-type": "application/json", ...(init?.headers || {}) },
+      headers,
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw new Error("Die versoek het te lank geneem. Herlaai die blad en probeer weer.");
@@ -1656,10 +1686,7 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
           </>
         )}
         {tab === "messages" && (
-          <SimplePanel title="Boodskappe" subtitle="Amptelike kennisgewings en hulp.">
-            <InfoRow icon={Bell} title="Amptelike kennisgewings" text="Belangrike Skou-opdaterings sal hier verskyn." />
-            <InfoRow icon={MessageCircle} title="Skou-ondersteuning" text="Kontak die Skoukantoor vir hulp." />
-          </SimplePanel>
+          <MessagesPanel user={user} />
         )}
         {tab === "calendar" && (
           <SimplePanel title="Kalender" subtitle="Belangrike Skou-datums.">
@@ -2142,6 +2169,8 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
           <FamilyFlow />
         ) : moduleKey === "wallet" ? (
           <WalletFlow wallets={wallets} />
+        ) : moduleKey === "photos" ? (
+          <PhotosFlow />
         ) : moduleKey === "wallet-topup" ? (
           <PosWalletTopupPanel />
         ) : requestModuleDetails[moduleKey] ? (
@@ -3053,6 +3082,195 @@ function FamilyFlow() {
         </form>
       ) : <button className="sheet-primary-link family-add" onClick={() => setAdding(true)}><UserPlus /> Voeg familielid by</button>}
     </>
+  );
+}
+
+function PhotosFlow() {
+  const [photos, setPhotos] = useState<AppPhoto[] | null>(null);
+  const [title, setTitle] = useState("");
+  const [caption, setCaption] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const load = async () => {
+    const result = await api("/api/app/photos");
+    setPhotos(result.photos || []);
+  };
+  useEffect(() => {
+    let active = true;
+    void api("/api/app/photos")
+      .then((result) => { if (active) setPhotos(result.photos || []); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Foto’s kon nie gelaai word nie"); });
+    return () => { active = false; };
+  }, []);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!file) {
+      setError("Kies asseblief ’n foto.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const form = new FormData();
+    form.set("file", file);
+    form.set("title", title || "Skoufoto");
+    form.set("caption", caption);
+    try {
+      await api("/api/app/photos", { method: "POST", body: form });
+      setFile(null);
+      setTitle("");
+      setCaption("");
+      const input = event.currentTarget.querySelector<HTMLInputElement>('input[type="file"]');
+      if (input) input.value = "";
+      setMessage("Foto opgelaai. Dit wag nou vir goedkeuring voordat dit publiek gebruik word.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Foto kon nie opgelaai word nie");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <span className="detail-icon"><Images /></span>
+      <p className="eyebrow">Skoufoto’s</p>
+      <h2>Laai foto’s op</h2>
+      <p className="request-intro">Laai jou Skoufoto’s direk uit die app op. Nuwe foto’s bly eers privaat/pending totdat admin dit goedkeur vir publieke albums, bemarking of grootskerm gebruik.</p>
+      <form className="photo-upload-form" onSubmit={submit}>
+        <label>Titel
+          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="bv. Saterdag kuiertuin" maxLength={120} />
+        </label>
+        <label>Kort beskrywing
+          <textarea value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Wie/wat is op die foto? Enige notas vir admin." maxLength={600} />
+        </label>
+        <label>Foto
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+        </label>
+        <button className="app-primary" disabled={busy || !file}>
+          {busy ? <RefreshCw className="spin" /> : <Images />}
+          {busy ? "Laai op…" : "Laai foto op"}
+        </button>
+      </form>
+      {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+      {error && <p className="form-error">{error}</p>}
+      <section className="photo-gallery">
+        <div className="purchase-heading">
+          <div>
+            <strong>Foto’s</strong>
+            <small>Jou uploads plus foto’s wat reeds goedgekeur is</small>
+          </div>
+          <span>{photos?.length || 0}</span>
+        </div>
+        {photos === null ? (
+          <p className="loading-line"><RefreshCw className="spin" /> Laai foto’s…</p>
+        ) : photos.length ? (
+          <div className="photo-grid">
+            {photos.map((photo) => (
+              <article key={photo.id}>
+                <img src={photo.file_url} alt={photo.title} loading="lazy" />
+                <div>
+                  <strong>{photo.title}</strong>
+                  {photo.caption && <p>{photo.caption}</p>}
+                  <small>{photo.status === "approved" ? "Goedgekeur" : photo.status === "rejected" ? "Afgekeur" : "Wag vir goedkeuring"} · {new Date(photo.created_at * 1000).toLocaleString("af-ZA")}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState icon={<Images />} title="Nog geen foto’s nie" text="Laai die eerste foto op. Dit sal hier verskyn terwyl dit wag vir goedkeuring." />
+        )}
+      </section>
+    </>
+  );
+}
+
+function MessagesPanel({ user }: { user: AppUser }) {
+  const [contacts, setContacts] = useState<AppMessageContact[]>([]);
+  const [messages, setMessages] = useState<AppMessage[] | null>(null);
+  const [selected, setSelected] = useState("committee:0");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const load = async () => {
+    const [contactResult, messageResult] = await Promise.all([api("/api/app/messages/contacts"), api("/api/app/messages")]);
+    setContacts(contactResult.contacts || []);
+    setMessages(messageResult.messages || []);
+    const first = contactResult.contacts?.[0];
+    if (first) setSelected(`${first.type}:${first.id}`);
+  };
+  useEffect(() => {
+    let active = true;
+    void Promise.all([api("/api/app/messages/contacts"), api("/api/app/messages")])
+      .then(([contactResult, messageResult]) => {
+        if (!active) return;
+        const nextContacts = contactResult.contacts || [];
+        setContacts(nextContacts);
+        setMessages(messageResult.messages || []);
+        const first = nextContacts[0];
+        if (first) setSelected(`${first.type}:${first.id}`);
+      })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Boodskappe kon nie gelaai word nie"); });
+    return () => { active = false; };
+  }, []);
+  const send = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const [recipient_type, rawId] = selected.split(":");
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/app/messages", { method: "POST", body: JSON.stringify({ recipient_type, recipient_id: Number(rawId || 0), body }) });
+      setBody("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Boodskap kon nie gestuur word nie");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <SimplePanel title="Boodskappe" subtitle={user.source === "staff" ? "Komitee- en personeelkommunikasie." : "Familie-notas en boodskappe aan die Skou-kantoor."}>
+      <form className="message-compose" onSubmit={send}>
+        <label>Stuur aan
+          <select value={selected} onChange={(event) => setSelected(event.target.value)}>
+            {contacts.map((contact) => <option key={`${contact.type}:${contact.id}`} value={`${contact.type}:${contact.id}`}>{contact.name}</option>)}
+          </select>
+        </label>
+        {contacts.length > 0 && (
+          <div className="contact-strip">
+            {contacts.slice(0, 8).map((contact) => (
+              <button type="button" key={`${contact.type}:${contact.id}`} className={selected === `${contact.type}:${contact.id}` ? "active" : ""} onClick={() => setSelected(`${contact.type}:${contact.id}`)}>
+                <strong>{contact.name}</strong>
+                {contact.detail && <small>{contact.detail}</small>}
+              </button>
+            ))}
+          </div>
+        )}
+        <label>Boodskap
+          <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Tik jou boodskap hier…" maxLength={1000} />
+        </label>
+        <button className="app-primary" disabled={busy || body.trim().length < 2 || contacts.length === 0}>
+          {busy ? <RefreshCw className="spin" /> : <MessageCircle />}
+          {busy ? "Stuur…" : "Stuur boodskap"}
+        </button>
+      </form>
+      {error && <p className="form-error">{error}</p>}
+      <div className="message-list">
+        {messages === null ? (
+          <p className="loading-line"><RefreshCw className="spin" /> Laai boodskappe…</p>
+        ) : messages.length ? (
+          messages.map((item) => (
+            <article key={item.id} className={item.direction}>
+              <small>{item.direction === "outgoing" ? `Aan ${item.recipient_name}` : `Van ${item.sender_name}`} · {new Date(item.created_at * 1000).toLocaleString("af-ZA")}</small>
+              <p>{item.body}</p>
+            </article>
+          ))
+        ) : (
+          <EmptyState icon={<MessageCircle />} title="Nog geen boodskappe nie" text="Gebruik hierdie skerm vir familie-notas, komitee-opvolg en hulpversoeke." />
+        )}
+      </div>
+    </SimplePanel>
   );
 }
 

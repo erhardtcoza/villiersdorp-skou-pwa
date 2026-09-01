@@ -50,6 +50,14 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /key:\s*"bar-pos"[\s\S]*?permissions:\s*\["bar_pos"\]/);
   assert.match(source, /key:\s*"wallet-topup"[\s\S]*?permissions:\s*\["pos_sales",\s*"bar_pos"\]/);
   assert.match(source, /key:\s*"wallet-topup"[\s\S]*?status:\s*"live"/);
+  assert.match(source, /key:\s*"photos"[\s\S]*?status:\s*"live"/);
+  assert.match(source, /moduleKey === "photos"[\s\S]*<PhotosFlow/);
+  assert.match(source, /api\("\/api\/app\/photos"/);
+  assert.match(source, /form\.set\("file",\s*file\)/);
+  assert.match(source, /init\?\.body instanceof FormData/);
+  assert.match(source, /<MessagesPanel user=\{user\} \/>/);
+  assert.match(source, /api\("\/api\/app\/messages\/contacts"\)/);
+  assert.match(source, /api\("\/api\/app\/messages"\)/);
   assert.match(source, /moduleKey === "wallet-topup"[\s\S]*<PosWalletTopupPanel/);
   assert.match(source, /api\(`\/api\/app\/staff\/wallets\/lookup\?q=\$\{encodeURIComponent\(query\.trim\(\)\)\}`\)/);
   assert.match(source, /api\("\/api\/app\/staff\/wallets\/create"/);
