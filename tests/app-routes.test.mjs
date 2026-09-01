@@ -43,12 +43,15 @@ test("app module permissions and native review labels stay aligned", async () =>
 test("native app keeps the same grouped app and POS navigation language", async () => {
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
 
-  for (const label of ["Kaartjies & Beursie", "POS & Toegang", "Perde", "Terrein & Verhurings", "Skou-inligting"]) {
+  for (const label of ["Kaartjies & Beursie", "POS & Toegang", "Perde", "Terrein & Verhurings", "Skou-inligting", "Doen perde-aansoek", "Verwerk perde-aansoeke", "Terreinbespreking", "Verhuring-goedkeuring"]) {
     assert.match(nativeSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   for (const area of ["pos_area=hek", "pos_area=kroeg", "pos_area=kombuis"]) {
     assert.match(nativeSource, new RegExp(area));
   }
+  assert.match(nativeSource, /permissions\?: string\[\]/);
+  assert.match(nativeSource, /function canUseModule\(user: User, item: Module\)/);
+  assert.match(nativeSource, /canUseModule\(me\.user, item\)/);
   assert.match(nativeSource, /grouped\.length\}\s*groepe/);
 });
 

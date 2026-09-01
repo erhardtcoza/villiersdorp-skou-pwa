@@ -7,7 +7,7 @@ import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Platfor
 const API_BASE = "https://tickets.villiersdorpskou.co.za";
 const TOKEN_KEY = "villiersdorp_skou_access_token";
 
-type User = { id: number; name: string; email: string | null; phone: string | null; role: string; source: "visitor" | "staff"; verified: boolean };
+type User = { id: number; name: string; email: string | null; phone: string | null; role: string; source: "visitor" | "staff"; verified: boolean; permissions?: string[] };
 type Ticket = { id: number; ticket_name: string; event_name: string; state: string; short_code?: string; qr_url: string; family_member_id?: number | null };
 type Wallet = { id: string; name: string; balance_cents: number; status: string };
 type FamilyMember = { id: number; name: string; relationship?: string | null; date_of_birth?: string | null };
@@ -21,7 +21,7 @@ type Me = { ok: true; user: User; tickets: Ticket[]; wallets: Wallet[] };
 type RoleView = "visitor" | "vendor" | "staff" | "committee";
 type Screen = "home" | "messages" | "calendar" | "tickets" | "family" | "wallet" | "bar" | "profile";
 type AuthMode = "login" | "register" | "verify" | "forgot" | "reset-code" | "reset-password";
-type Module = { key: string; icon: string; title: string; detail: string; roles: readonly RoleView[]; href?: string };
+type Module = { key: string; icon: string; title: string; detail: string; roles: readonly RoleView[]; href?: string; permissions?: readonly string[] };
 type ModuleGroup = { key: string; icon: string; title: string; detail: string; roles: readonly RoleView[]; modules: readonly string[] };
 
 const modules: readonly Module[] = [
@@ -31,25 +31,35 @@ const modules: readonly Module[] = [
   { key: "programme", icon: "📅", title: "Skouprogram", detail: "Tye, verhoë en hoogtepunte", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/#program" },
   { key: "map", icon: "🗺️", title: "Skoukaart", detail: "Hekke, arenas, stalletjies en geriewe", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/vendors" },
   { key: "wallet", icon: "💳", title: "Skoubeursie", detail: "Balans, kaart en transaksies", roles: ["visitor", "committee"] },
-  { key: "vendor", icon: "🏪", title: "Uitstallerprofiel", detail: "Aansoek, span en hek-passe", roles: ["vendor", "committee"], href: "https://www.villiersdorpskou.co.za/vendor-apply" },
-  { key: "bar", icon: "🍻", title: "Kroegtransaksies", detail: "Laaste verkope en gemagtigde refunds", roles: ["staff", "committee"] },
-  { key: "pos", icon: "🧾", title: "Hek POS", detail: "Hekkaartjies, verkope en dagafsluiting", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=hek` },
-  { key: "bar-pos", icon: "🍻", title: "Kroeg POS", detail: "Kroegverkope, Yoco en beursiebetalings", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=kroeg` },
-  { key: "kitchen-pos", icon: "🍽️", title: "Kombuis POS", detail: "Kombuisverkope en toekomstige afdelings", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=kombuis` },
-  { key: "gates", icon: "📷", title: "Hek scan in / uit", detail: "Skandeer kaartjies en monitor toegang", roles: ["staff", "committee"], href: `${API_BASE}/scan` },
-  { key: "horses", icon: "🏆", title: "Perde", detail: "Aansoeke, klasse, program en verwerking", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/perde" },
-  { key: "rentals", icon: "🏛️", title: "Verhurings", detail: "Terreinbesprekings, aansoeke en goedkeurings", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/verhurings" },
-  { key: "operations", icon: "📊", title: "Operasies", detail: "Bywoning, verkope en stelselgesondheid", roles: ["staff", "committee"], href: "https://www.villiersdorpskou.co.za/admin#posv1" },
+  { key: "vendor", icon: "🏪", title: "Uitstallerprofiel", detail: "Aansoek, span en hek-passe", roles: ["vendor", "committee"], href: "https://www.villiersdorpskou.co.za/vendor-apply", permissions: ["vendors_applications", "vendors_approve"] },
+  { key: "bar", icon: "🍻", title: "Kroegtransaksies", detail: "Laaste verkope en gemagtigde refunds", roles: ["staff", "committee"], permissions: ["bar_transactions", "bar_refunds"] },
+  { key: "pos", icon: "🧾", title: "Hek POS", detail: "Hekkaartjies, verkope en dagafsluiting", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=hek`, permissions: ["pos_sales"] },
+  { key: "bar-pos", icon: "🍻", title: "Kroeg POS", detail: "Kroegverkope, Yoco en beursiebetalings", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=kroeg`, permissions: ["bar_pos"] },
+  { key: "kitchen-pos", icon: "🍽️", title: "Kombuis POS", detail: "Kombuisverkope en toekomstige afdelings", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=kombuis`, permissions: ["kitchen_pos"] },
+  { key: "gates", icon: "📷", title: "Hek scan in / uit", detail: "Skandeer kaartjies en monitor toegang", roles: ["staff", "committee"], href: `${API_BASE}/scan`, permissions: ["gates_scan"] },
+  { key: "horse-apply", icon: "🏆", title: "Doen perde-aansoek", detail: "Inskrywings, klasse en dokumente", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/perde" },
+  { key: "horse-processing", icon: "📋", title: "Verwerk perde-aansoeke", detail: "Personeel queue en opvolgstatus", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/perde", permissions: ["horses_entries", "horses_approve", "horses_programme"] },
+  { key: "horse-programme", icon: "📅", title: "Perdeprogram", detail: "Publieke program, klasse en tye", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/perde" },
+  { key: "venue-booking", icon: "🏛️", title: "Terreinbespreking", detail: "Bespreek terrein, arena of saal", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/terreinbesprekings" },
+  { key: "rentals", icon: "🏛️", title: "Verhuring-aansoek", detail: "Verhurings, besprekings en opvolg", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/verhurings" },
+  { key: "rental-approvals", icon: "📋", title: "Verhuring-goedkeuring", detail: "Personeel queue en goedkeurings", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/verhurings", permissions: ["rentals_manage", "grounds_venues"] },
+  { key: "operations", icon: "📊", title: "Operasies", detail: "Bywoning, verkope en stelselgesondheid", roles: ["staff", "committee"], href: "https://www.villiersdorpskou.co.za/admin#posv1", permissions: ["ops_reports"] },
 ] as const;
 
 const moduleGroups: readonly ModuleGroup[] = [
   { key: "visitor", icon: "🎟️", title: "Kaartjies & Beursie", detail: "Koop kaartjies, wys QR’s, bestuur familie en laai beursie.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["tickets", "wallet", "family", "membership"] },
   { key: "pos-access", icon: "📷", title: "POS & Toegang", detail: "Hek, Kroeg, Kombuis en scan workflows vir personeel.", roles: ["staff", "committee"], modules: ["pos", "bar-pos", "kitchen-pos", "gates", "bar", "operations"] },
-  { key: "horses", icon: "🏆", title: "Perde", detail: "Doen aansoek, sien program, of verwerk aansoeke met regte.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["horses"] },
+  { key: "horses", icon: "🏆", title: "Perde", detail: "Doen aansoek, sien program, of verwerk aansoeke met regte.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["horse-apply", "horse-processing", "horse-programme"] },
   { key: "vendors", icon: "🏪", title: "Uitstallers", detail: "Aansoeke, profiel, span en hekpasse.", roles: ["vendor", "committee"], modules: ["vendor"] },
-  { key: "grounds", icon: "🏛️", title: "Terrein & Verhurings", detail: "Verhurings, terreinbesprekings en goedkeurings.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["rentals"] },
+  { key: "grounds", icon: "🏛️", title: "Terrein & Verhurings", detail: "Verhurings, terreinbesprekings en goedkeurings.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["venue-booking", "rentals", "rental-approvals"] },
   { key: "show", icon: "🗺️", title: "Skou-inligting", detail: "Program, kaart en publieke inligting.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["programme", "map"] },
 ] as const;
+
+function canUseModule(user: User, item: Module) {
+  if (!item.permissions?.length) return true;
+  if (["admin", "manager"].includes(user.role)) return true;
+  return item.permissions.some((permission) => user.permissions?.includes(permission));
+}
 
 async function request(path: string, options: RequestInit = {}, token?: string | null) {
   const controller = new AbortController();
@@ -133,7 +143,7 @@ function Field({ label, value, onChange, secure, keyboard }: { label: string; va
 function MainApp({ me, token, screen, onScreen, onLogout, onRefresh }: { me: Me; token: string; screen: Screen; onScreen: (screen: Screen) => void; onLogout: () => void; onRefresh: () => Promise<void> }) {
   const view = roleView(me.user.role), [preview, setPreview] = useState<RoleView>(view), grouped = useMemo(() => moduleGroups.filter((group) => group.roles.includes(preview)).map((group) => ({ ...group, items: group.modules.map((key) => modules.find((item) => item.key === key)).filter((item): item is Module => {
     if (!item) return false;
-    return item.roles.includes(preview);
+    return item.roles.includes(preview) && canUseModule(me.user, item);
   }) })).filter((group) => group.items.length > 0), [preview]);
   const walletTotal = me.wallets.reduce((sum, wallet) => sum + wallet.balance_cents, 0);
   const openModule = (item: Module) => item.href ? void Linking.openURL(item.href) : onScreen(item.key as Screen);
