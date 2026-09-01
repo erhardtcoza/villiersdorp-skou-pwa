@@ -99,6 +99,16 @@ test("app and native menu permissions exist in the backend access catalog", asyn
   }
 });
 
+test("web and native menus preserve backend admin and manager all-access semantics", async () => {
+  const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
+  const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
+  const accessSource = await readFile(path.join(root, "../vill-skou-events-dev-live/src/utils/access_model.js"), "utf8");
+
+  assert.match(accessSource, /if \(\["admin", "manager"\]\.includes\(normalized\)\) return \[\.\.\.ALL_PERMISSION_KEYS\]/);
+  assert.match(webSource, /function hasAnyPermission\(user: AppUser, required\?: string\[\]\)[\s\S]*\["admin", "manager"\]\.includes\(String\(user\.role \|\| ""\)\.toLowerCase\(\)\)/);
+  assert.match(nativeSource, /if \(\["admin", "manager"\]\.includes\(user\.role\)\) return true/);
+});
+
 test("bar refund clients surface backend failures and reuse refund keys while busy", async () => {
   const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");

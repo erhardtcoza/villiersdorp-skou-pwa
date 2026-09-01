@@ -604,6 +604,7 @@ const appModuleGroups: AppModuleGroup[] = [
 
 function hasAnyPermission(user: AppUser, required?: string[]) {
   if (!required?.length) return true;
+  if (["admin", "manager"].includes(String(user.role || "").toLowerCase())) return true;
   return required.some((permission) => user.permissions?.includes(permission));
 }
 
