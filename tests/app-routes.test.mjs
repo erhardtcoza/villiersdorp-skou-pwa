@@ -79,6 +79,26 @@ test("native app keeps the same grouped app and POS navigation language", async 
   assert.doesNotMatch(nativeSource, /verdere opsies op die PWA/);
 });
 
+test("app and native menu permissions exist in the backend access catalog", async () => {
+  const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
+  const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
+  const accessSource = await readFile(path.join(root, "../vill-skou-events-dev-live/src/utils/access_model.js"), "utf8");
+  const backendPermissions = new Set([...accessSource.matchAll(/key:\s*"([^"]+)"/g)].map((match) => match[1]));
+  const usedPermissions = new Set();
+  for (const source of [webSource, nativeSource]) {
+    for (const block of source.matchAll(/permissions:\s*\[([^\]]*)\]/g)) {
+      for (const permission of block[1].matchAll(/"([^"]+)"/g)) {
+        usedPermissions.add(permission[1]);
+      }
+    }
+  }
+
+  assert.notEqual(usedPermissions.size, 0, "menu permissions should be detected");
+  for (const permission of usedPermissions) {
+    assert.equal(backendPermissions.has(permission), true, `menu uses unknown backend permission ${permission}`);
+  }
+});
+
 test("bar refund clients surface backend failures and reuse refund keys while busy", async () => {
   const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
