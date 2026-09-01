@@ -53,6 +53,7 @@ type AppHealth = {
   ok: boolean;
   checked_at?: string;
   event?: { ticket_types?: number };
+  checks?: Record<string, { status?: "ok" | "warn" | "fail"; detail?: string }>;
 };
 type AuthView = "welcome" | "login" | "register" | "verify" | "forgot" | "reset-code" | "reset-password";
 type AppTab = "home" | "messages" | "calendar" | "profile";
@@ -1459,6 +1460,16 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
       .filter((group) => group.items.length > 0);
   const allowedGroupByKey = (key: string) => allowedGrouped.find((group) => group.key === key);
   const canOpenModule = (key: string) => Boolean(allowed.find((item) => item.key === key));
+  const healthChecks = Object.values(health?.checks || {});
+  const healthIssues = healthChecks.filter((check) => check.status && check.status !== "ok");
+  const healthStatus = health ? (!health.ok || healthIssues.some((check) => check.status === "fail") ? "fail" : healthIssues.length ? "warn" : "ok") : "checking";
+  const healthSummary = healthStatus === "ok"
+    ? `${health.event?.ticket_types || 0} kaartjie-tipes · ${health.checks?.yoco_payments?.detail || "Yoco nagegaan"} · ${health.checks?.pos_config?.detail || "POS nagegaan"}`
+    : healthStatus === "warn"
+      ? `${healthIssues.length} waarskuwing${healthIssues.length === 1 ? "" : "s"} — maak status oop`
+      : health
+        ? "Maak statusblad oop vir detail"
+        : "Besig om status te toets";
   const pageFromPath = () => pageFromBrowserPath(window.location.pathname);
   const navigatePage = (next: AppPage, replace = false) => {
     const path = pagePath(next);
@@ -1572,11 +1583,11 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
                 </span>
               </button>
             </div>
-            <a className={`app-health-strip ${health?.ok ? "ok" : health ? "fail" : "checking"}`} href="/status">
-              {health?.ok ? <CheckCircle2 /> : <Activity />}
+            <a className={`app-health-strip ${healthStatus}`} href="/status">
+              {healthStatus === "ok" ? <CheckCircle2 /> : <Activity />}
               <span>
-                <strong>{health?.ok ? "Stelsel aanlyn" : health ? "Stelsel aandag nodig" : "Toets stelselstatus"}</strong>
-                <small>{health?.ok ? `${health.event?.ticket_types || 0} kaartjie-tipes beskikbaar` : "Maak statusblad oop vir detail"}</small>
+                <strong>{healthStatus === "ok" ? "Stelsel aanlyn" : healthStatus === "warn" ? "Stelsel waarskuwing" : health ? "Stelsel aandag nodig" : "Toets stelselstatus"}</strong>
+                <small>{healthSummary}</small>
               </span>
               <b>Status</b>
             </a>

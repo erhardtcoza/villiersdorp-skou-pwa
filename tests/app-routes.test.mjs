@@ -68,6 +68,8 @@ test("bar refund clients surface backend failures and reuse refund keys while bu
   assert.match(webSource, /idempotency_key: idempotencyKey/);
   assert.match(webSource, /Yoco het nog nie finaal bevestig nie/);
   assert.match(webSource, /Die app probeer die Yoco-kaart refund dadelik/);
+  assert.match(webSource, /health\.checks\?\.yoco_payments\?\.detail/);
+  assert.match(webSource, /health\.checks\?\.pos_config\?\.detail/);
 
   assert.match(nativeSource, /!response\.ok \|\| data\?\.ok === false/);
   assert.match(nativeSource, /Die versoek het te lank geneem\. Herlaai die app en probeer weer/);

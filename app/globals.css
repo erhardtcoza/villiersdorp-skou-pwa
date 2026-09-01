@@ -191,6 +191,14 @@
   color: #fff;
   background: #ba3030;
 }
+.app-health-strip.warn {
+  border-color: #ecd08d;
+  background: #fff8e2;
+}
+.app-health-strip.warn > svg {
+  color: #17331f;
+  background: #f2d06e;
+}
 .app-health-strip.checking > svg {
   color: #17331f;
   background: #f2d06e;
