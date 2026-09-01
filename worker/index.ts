@@ -19,11 +19,9 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-const BACKEND_ORIGIN = "https://tickets.villiersdorpskou.co.za";
-
 async function proxyBackend(request: Request, upstreamPath?: string): Promise<Response> {
   const url = new URL(request.url);
-  const upstream = new URL(upstreamPath || `${url.pathname}${url.search}`, BACKEND_ORIGIN);
+  const upstream = new URL(upstreamPath || `${url.pathname}${url.search}`, "https://tickets.villiersdorpskou.co.za");
   const headers = new Headers(request.headers);
   headers.set("host", upstream.host);
   const response = await fetch(new Request(upstream, {
@@ -34,13 +32,6 @@ async function proxyBackend(request: Request, upstreamPath?: string): Promise<Re
   }));
   const proxiedHeaders = new Headers(response.headers);
   proxiedHeaders.set("cache-control", "no-store");
-  const location = proxiedHeaders.get("location");
-  if (location) {
-    const rewritten = location.startsWith(BACKEND_ORIGIN)
-      ? location.replace(BACKEND_ORIGIN, "")
-      : location;
-    proxiedHeaders.set("location", rewritten);
-  }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers: proxiedHeaders });
 }
 
@@ -128,16 +119,6 @@ const worker = {
         status: payload.ok ? 200 : 503,
         headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
       });
-    }
-
-    if (url.pathname === "/pos-terminal") {
-      return proxyBackend(request, `/app${url.search}`);
-    }
-    if (url.pathname === "/scan-terminal") {
-      return proxyBackend(request, `/scan${url.search}`);
-    }
-    if (url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/pos/") || url.pathname.startsWith("/scan/") || url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/api/pos/") || url.pathname.startsWith("/api/scan/")) {
-      return proxyBackend(request);
     }
 
     const isAppApi = url.pathname.startsWith("/api/app/");
