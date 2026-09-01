@@ -1440,11 +1440,17 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
     [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : pageFromBrowserPath(window.location.pathname));
   const walletTotal = wallets.reduce((sum, w) => sum + w.balance_cents, 0),
     visible = appModules.filter((item) => item.roles.includes(preview) && hasAnyPermission(user, item.permissions)),
+    allowed = appModules.filter((item) => item.roles.includes(actualView) && hasAnyPermission(user, item.permissions)),
     grouped = appModuleGroups
       .filter((group) => group.roles.includes(preview))
       .map((group) => ({ ...group, items: group.modules.map((key) => visible.find((item) => item.key === key)).filter((item): item is AppModule => Boolean(item)) }))
+      .filter((group) => group.items.length > 0),
+    allowedGrouped = appModuleGroups
+      .filter((group) => group.roles.includes(actualView))
+      .map((group) => ({ ...group, items: group.modules.map((key) => allowed.find((item) => item.key === key)).filter((item): item is AppModule => Boolean(item)) }))
       .filter((group) => group.items.length > 0);
-  const groupByKey = (key: string) => grouped.find((group) => group.key === key);
+  const allowedGroupByKey = (key: string) => allowedGrouped.find((group) => group.key === key);
+  const canOpenModule = (key: string) => Boolean(allowed.find((item) => item.key === key));
   const pageFromPath = () => pageFromBrowserPath(window.location.pathname);
   const navigatePage = (next: AppPage, replace = false) => {
     const path = pagePath(next);
@@ -1502,19 +1508,19 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
           </AppSubPage>
         ) : page === "bar" ? (
           <AppSubPage eyebrow="Kroeg" title="Kroegtransaksies" icon={Activity} onBack={() => navigatePage("home")}>
-            <BarTransactionsPage user={user} />
+            {canOpenModule("bar-transactions") ? <BarTransactionsPage user={user} /> : <EmptyState icon={<ShieldCheck />} title="Geen toegang" text="Jy het nog nie kroegtransaksie- of refund-regte op hierdie rekening nie." />}
           </AppSubPage>
         ) : page === "pos" ? (
           <AppSubPage eyebrow="POS & Toegang" title="Hek, Kroeg, Kombuis en Scan" icon={ScanLine} onBack={() => navigatePage("home")}>
-            <WorkflowGroupPage group={groupByKey("pos-access")} onOpen={openModule} fallback="Jy het nog nie POS- of hektoegang op hierdie rekening nie." />
+            <WorkflowGroupPage group={allowedGroupByKey("pos-access")} onOpen={openModule} fallback="Jy het nog nie POS- of hektoegang op hierdie rekening nie." />
           </AppSubPage>
         ) : page === "horses" ? (
           <AppSubPage eyebrow="Perde" title="Perde-aansoeke en verwerking" icon={Trophy} onBack={() => navigatePage("home")}>
-            <WorkflowGroupPage group={groupByKey("horses")} onOpen={openModule} fallback="Perde-aansoeke en programskakels is nog nie vir hierdie aansig beskikbaar nie." />
+            <WorkflowGroupPage group={allowedGroupByKey("horses")} onOpen={openModule} fallback="Perde-aansoeke en programskakels is nog nie vir hierdie rekening beskikbaar nie." />
           </AppSubPage>
         ) : page === "rentals" ? (
           <AppSubPage eyebrow="Verhurings" title="Terrein, geboue en goedkeurings" icon={Landmark} onBack={() => navigatePage("home")}>
-            <WorkflowGroupPage group={groupByKey("grounds")} onOpen={openModule} fallback="Verhurings- en terreinopsies is nog nie vir hierdie aansig beskikbaar nie." />
+            <WorkflowGroupPage group={allowedGroupByKey("grounds")} onOpen={openModule} fallback="Verhurings- en terreinopsies is nog nie vir hierdie rekening beskikbaar nie." />
           </AppSubPage>
         ) : tab === "home" && (
           <>
