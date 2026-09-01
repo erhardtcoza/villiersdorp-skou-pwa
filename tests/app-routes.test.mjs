@@ -29,7 +29,10 @@ test("app shell subroutes explicitly render the hydrated client app", async () =
 test("app module permissions and native review labels stay aligned", async () => {
   const source = await readFile(path.join(root, "app/page.tsx"), "utf8");
 
-  assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?permissions:\s*\["kitchen_pos",\s*"pos_sales"\]/);
+  assert.match(source, /key:\s*"pos"[\s\S]*?permissions:\s*\["pos_sales"\]/);
+  assert.match(source, /key:\s*"bar-pos"[\s\S]*?permissions:\s*\["bar_pos"\]/);
+  assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?permissions:\s*\["kitchen_pos"\]/);
+  assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
   for (const key of ["applications", "horse-processing", "venue-approvals", "rental-approvals"]) {
     const moduleBlock = source.match(new RegExp(`key:\\s*"${key}"[\\s\\S]*?status:\\s*"([^"]+)"`));
     assert.equal(moduleBlock?.[1], "live", `${key} should be marked as an app-native live workflow`);
@@ -49,4 +52,13 @@ test("bar refund clients surface backend failures and reuse refund keys while bu
   assert.match(nativeSource, /!response\.ok \|\| data\?\.ok === false/);
   assert.match(nativeSource, /const idempotencyKey = refundKeys\[transaction\.id\]/);
   assert.match(nativeSource, /idempotency_key: idempotencyKey/);
+});
+
+test("app health route checks the app backend and ticket catalogue", async () => {
+  const workerSource = await readFile(path.join(root, "worker/index.ts"), "utf8");
+
+  assert.match(workerSource, /https:\/\/tickets\.villiersdorpskou\.co\.za\/api\/app\/health/);
+  assert.match(workerSource, /https:\/\/tickets\.villiersdorpskou\.co\.za\/api\/public\/health/);
+  assert.match(workerSource, /App backend health API is reachable/);
+  assert.match(workerSource, /payload\.checks\.ticket_catalogue/);
 });
