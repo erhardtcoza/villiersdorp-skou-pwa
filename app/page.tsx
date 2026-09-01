@@ -1519,8 +1519,12 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
             {canOpenModule("bar-transactions") ? <BarTransactionsPage user={user} /> : <EmptyState icon={<ShieldCheck />} title="Geen toegang" text="Jy het nog nie kroegtransaksie- of refund-regte op hierdie rekening nie." />}
           </AppSubPage>
         ) : page === "pos" ? (
-          <AppSubPage eyebrow="POS & Toegang" title="Hek, Kroeg, Kombuis en Scan" icon={ScanLine} onBack={() => navigatePage("home")}>
-            <WorkflowGroupPage group={allowedGroupByKey("pos-access")} onOpen={openModule} fallback="Jy het nog nie POS- of hektoegang op hierdie rekening nie." />
+          <AppSubPage eyebrow="POS & Toegang" title="Kies POS-afdeling" icon={ScanLine} onBack={() => navigatePage("home")}>
+            {canOpenModule("pos") || canOpenModule("bar-pos") || canOpenModule("kitchen-pos") ? (
+              <PosLauncherPanel moduleKey="pos-menu" ModuleIcon={ScanLine} />
+            ) : (
+              <WorkflowGroupPage group={allowedGroupByKey("pos-access")} onOpen={openModule} fallback="Jy het nog nie POS- of hektoegang op hierdie rekening nie." />
+            )}
           </AppSubPage>
         ) : page === "horses" ? (
           <AppSubPage eyebrow="Perde" title="Perde-aansoeke en verwerking" icon={Trophy} onBack={() => navigatePage("home")}>
@@ -2133,11 +2137,11 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
     <>
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
       <p className="eyebrow">POS & toegang</p>
-      <h2>{moduleInfo?.title || "POS"}</h2>
+      <h2>{moduleInfo?.title || "Kies POS-afdeling"}</h2>
       <p className="module-availability" data-status={moduleInfo?.status || "admin"}>
         Mobiele launch-pad vir personeel se verkoop- en toegangskerms.
       </p>
-      <p>Die PWA hou die menu skoon, maar gee personeel een plek om die regte POS-afdeling oop te maak. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
+      <p>Die PWA hou die menu skoon: kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling wat in die backend opgestel word. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
       {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-afdelings…</p>}
       {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Die veilige standaard-skakels bly beskikbaar.</p>}
       {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}

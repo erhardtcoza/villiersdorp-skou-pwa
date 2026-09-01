@@ -38,6 +38,8 @@ test("app module permissions and native review labels stay aligned", async () =>
     assert.equal(moduleBlock?.[1], "live", `${key} should be marked as an app-native live workflow`);
   }
   assert.match(source, /const staffReviewScopes:[\s\S]*"horse-processing"[\s\S]*"venue-approvals"[\s\S]*"rental-approvals"[\s\S]*applications/);
+  assert.match(source, /page === "pos"[\s\S]*title="Kies POS-afdeling"[\s\S]*<PosLauncherPanel moduleKey="pos-menu" ModuleIcon=\{ScanLine\} \/>/);
+  assert.match(source, /kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling/);
 });
 
 test("native app keeps the same grouped app and POS navigation language", async () => {
