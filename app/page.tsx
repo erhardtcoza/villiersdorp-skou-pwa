@@ -2,7 +2,7 @@
 
 import { Activity, ArrowLeft, ArrowRight, Bell, CalendarDays, CheckCircle2, ChevronRight, CircleUserRound, ClipboardCheck, Eye, EyeOff, Home, Images, KeyRound, Landmark, LogIn, LogOut, MapPinned, MessageCircle, QrCode, RefreshCw, ScanLine, ShieldCheck, Store, Ticket, Trophy, UserPlus, Users, WalletCards, type LucideIcon } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type AppUser = {
   id: number;
@@ -127,6 +127,14 @@ type ServiceRequest = {
   admin_notes?: string | null;
   created_at: number;
   updated_at: number;
+};
+type StaffRequest = ServiceRequest & {
+  source: "service" | "venue";
+  payload?: Record<string, unknown> | null;
+  preferred_date?: string | null;
+  end_date?: string | null;
+  venue_area?: string | null;
+  expected_guests?: number | null;
 };
 type ServiceField = {
   key: string;
@@ -857,6 +865,29 @@ const requestModuleDetails: Record<string, ServiceModuleConfig> = {
       { key: "meeting_date", label: "Datum indien bekend", type: "date" },
       { key: "agenda_item", label: "Agenda item / notule punt", type: "textarea", required: true },
     ],
+  },
+};
+
+const staffReviewScopes: Record<string, { scope: string; title: string; intro: string }> = {
+  "horse-processing": {
+    scope: "horses",
+    title: "Verwerk perde-aansoeke",
+    intro: "Hersien perde-aansoeke en navrae wat uit die app ingestuur is. Die bestaande perde-admin bly beskikbaar vir fakture, klasse en formele verwerking.",
+  },
+  "venue-approvals": {
+    scope: "venues",
+    title: "Terreingoedkeurings",
+    intro: "Hersien terreinbesprekings vanaf die app en merk hulle vir opvolg, goedkeuring of kansellasie.",
+  },
+  "rental-approvals": {
+    scope: "rentals",
+    title: "Verhuring-goedkeuring",
+    intro: "Hersien verhuring- en terreinversoeke sodat bestuur later kwotasies, voorwaardes en fakture kan koppel.",
+  },
+  applications: {
+    scope: "vendors",
+    title: "Uitstaller-aansoeke",
+    intro: "Hersien app-ingediende uitstaller-, span- en hekpasversoeke. Die formele vendor admin bly die bron van waarheid vir fakture en staanplekke.",
   },
 };
 
@@ -2002,6 +2033,7 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
   const moduleInfo = appModules.find((item) => item.key === moduleKey);
   const ModuleIcon = moduleInfo?.icon;
   const isPosLauncher = ["pos", "bar-pos", "kitchen-pos", "gates"].includes(moduleKey);
+  const staffReview = staffReviewScopes[moduleKey];
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <section className="detail-sheet live-sheet" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
@@ -2017,6 +2049,8 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
           <WalletFlow wallets={wallets} />
         ) : requestModuleDetails[moduleKey] ? (
           <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
+        ) : staffReview ? (
+          <StaffRequestReviewPanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} config={staffReview} />
         ) : isPosLauncher ? (
           <PosLauncherPanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : (
@@ -2131,6 +2165,131 @@ function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey
         <strong>Access word reeds deur die server beheer</strong>
         <p>As hierdie module nie vir ’n gebruiker wys nie, gee eers die toepaslike permission in Admin → Users → Access.</p>
       </div>
+    </>
+  );
+}
+
+function StaffRequestReviewPanel({ moduleKey, moduleInfo, ModuleIcon, config }: { moduleKey: string; moduleInfo?: AppModule; ModuleIcon?: LucideIcon; config: { scope: string; title: string; intro: string } }) {
+  const [requests, setRequests] = useState<StaffRequest[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, { status: string; admin_notes: string }>>({});
+  const [loading, setLoading] = useState(true);
+  const [busyKey, setBusyKey] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const panel = modulePanels[moduleKey];
+  const keyFor = (request: StaffRequest) => `${request.source}:${request.id}`;
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api(`/api/app/staff/requests?scope=${encodeURIComponent(config.scope)}&limit=50`);
+      const rows = result.requests || [];
+      setRequests(rows);
+      setDrafts(Object.fromEntries(rows.map((request: StaffRequest) => [keyFor(request), { status: request.status || "submitted", admin_notes: request.admin_notes || "" }])));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Versoeke kon nie gelaai word nie");
+    } finally {
+      setLoading(false);
+    }
+  }, [config.scope]);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void load();
+    });
+    return () => { active = false; };
+  }, [load]);
+  const updateDraft = (request: StaffRequest, patch: Partial<{ status: string; admin_notes: string }>) => {
+    const key = keyFor(request);
+    setDrafts((current) => ({ ...current, [key]: { status: current[key]?.status || request.status || "submitted", admin_notes: current[key]?.admin_notes ?? request.admin_notes ?? "", ...patch } }));
+  };
+  const save = async (request: StaffRequest) => {
+    const key = keyFor(request);
+    const draft = drafts[key] || { status: request.status, admin_notes: request.admin_notes || "" };
+    setBusyKey(key);
+    setError("");
+    setMessage("");
+    try {
+      const result = await api(`/api/app/staff/requests/${encodeURIComponent(request.source)}/${request.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: draft.status, admin_notes: draft.admin_notes }),
+      });
+      setRequests((current) => current.map((row) => keyFor(row) === key ? result.request : row));
+      setDrafts((current) => ({ ...current, [key]: { status: result.request.status, admin_notes: result.request.admin_notes || "" } }));
+      setMessage("Versoek is opgedateer.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Versoek kon nie opgedateer word nie");
+    } finally {
+      setBusyKey("");
+    }
+  };
+  return (
+    <>
+      <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+      <p className="eyebrow">Personeel verwerking</p>
+      <h2>{config.title}</h2>
+      <p className="request-intro">{config.intro}</p>
+      {moduleInfo?.href && (
+        <a className="sheet-primary-link module-launch secondary-launch" href={moduleInfo.href}>
+          Maak bestaande admin/web skerm oop <ArrowRight />
+        </a>
+      )}
+      {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+      {error && <p className="form-error">{error}</p>}
+      {loading ? (
+        <p className="loading-line"><RefreshCw className="spin" /> Laai versoeke…</p>
+      ) : requests.length ? (
+        <section className="staff-review-list">
+          {requests.map((request) => {
+            const key = keyFor(request);
+            const draft = drafts[key] || { status: request.status || "submitted", admin_notes: request.admin_notes || "" };
+            return (
+              <article key={key} className="staff-review-card">
+                <div className="staff-review-head">
+                  <div>
+                    <small>{request.source === "venue" ? "Terreinbespreking" : request.module_key} · {new Date(request.created_at * 1000).toLocaleString("af-ZA")}</small>
+                    <strong>{request.title}</strong>
+                    <p>{request.contact_name} · {request.contact_phone}{request.contact_email ? ` · ${request.contact_email}` : ""}</p>
+                  </div>
+                  <span data-status={request.status}>{serviceStatusLabel(request.status)}</span>
+                </div>
+                <p className="staff-review-detail">{request.details}</p>
+                {request.source === "venue" && <small className="provider-note">{request.venue_area}{request.preferred_date ? ` · ${request.preferred_date}` : ""}{request.expected_guests ? ` · ${request.expected_guests} gaste` : ""}</small>}
+                <div className="staff-review-controls">
+                  <label>Status
+                    <select value={draft.status} onChange={(event) => updateDraft(request, { status: event.target.value })}>
+                      <option value="submitted">Ontvang</option>
+                      <option value="reviewing">Word hersien</option>
+                      <option value="approved">Goedgekeur</option>
+                      <option value="declined">Afgekeur</option>
+                      <option value="cancelled">Gekanselleer</option>
+                      <option value="completed">Voltooi</option>
+                    </select>
+                  </label>
+                  <label>Admin nota
+                    <textarea value={draft.admin_notes} onChange={(event) => updateDraft(request, { admin_notes: event.target.value })} placeholder="Kort opvolgnota vir die aansoeker of adminspan." />
+                  </label>
+                </div>
+                <button className="app-primary compact-action" disabled={busyKey === key} onClick={() => void save(request)}>
+                  {busyKey === key ? <RefreshCw className="spin" /> : <ClipboardCheck />}
+                  {busyKey === key ? "Stoor…" : "Stoor status"}
+                </button>
+              </article>
+            );
+          })}
+        </section>
+      ) : (
+        <EmptyState icon={ModuleIcon ? <ModuleIcon /> : <ClipboardCheck />} title="Geen versoeke gevind nie" text="Daar is tans geen app-versoeke vir hierdie afdeling of jou regte nie." />
+      )}
+      {panel && (
+        <div className="handoff">
+          <strong>Volgende koppeling</strong>
+          <p>{panel.next.join(" · ")}</p>
+        </div>
+      )}
+      <button className="sheet-secondary" onClick={() => void load()} disabled={loading || Boolean(busyKey)}>
+        <RefreshCw className={loading ? "spin" : ""} /> Herlaai lys
+      </button>
     </>
   );
 }

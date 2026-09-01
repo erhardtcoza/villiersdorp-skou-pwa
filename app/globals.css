@@ -852,6 +852,124 @@
 .secure-topup-note strong {
   color: #2f5538;
 }
+.staff-review-list {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+}
+.staff-review-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+.staff-review-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+.staff-review-head small,
+.staff-review-head strong,
+.staff-review-head p {
+  display: block;
+  margin: 0;
+}
+.staff-review-head small {
+  color: #8b6816;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.staff-review-head strong {
+  margin-top: 3px;
+  color: #102d22;
+  font-size: 15px;
+}
+.staff-review-head p,
+.staff-review-detail {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.staff-review-head > span {
+  width: max-content;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #f4eddf;
+  color: #88651b;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.staff-review-head > span[data-status="approved"],
+.staff-review-head > span[data-status="completed"] {
+  color: #246137;
+  background: #e0f1dc;
+}
+.staff-review-head > span[data-status="declined"],
+.staff-review-head > span[data-status="cancelled"] {
+  color: #962d2d;
+  background: #f7dddd;
+}
+.staff-review-head > span[data-status="reviewing"] {
+  color: #205c6e;
+  background: #dcedf1;
+}
+.staff-review-detail {
+  margin: 0;
+  padding: 10px;
+  border-left: 4px solid #d7aa2e;
+  border-radius: 10px;
+  background: #fff8df;
+}
+.staff-review-controls {
+  display: grid;
+  gap: 9px;
+}
+.staff-review-controls label {
+  display: grid;
+  gap: 6px;
+  color: #40534a;
+  font-size: 10px;
+  font-weight: 850;
+}
+.staff-review-controls select,
+.staff-review-controls textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 11px;
+  border: 1px solid #d7d2c8;
+  border-radius: 12px;
+  background: #fffefb;
+  color: var(--ink);
+  font: inherit;
+}
+.staff-review-controls textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.compact-action {
+  min-height: 44px !important;
+  padding: 10px 14px !important;
+}
+.sheet-secondary {
+  width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: #0d4c2b;
+  font-weight: 900;
+}
 .module-launch {
   margin: 14px 0 4px;
 }
