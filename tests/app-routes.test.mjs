@@ -54,6 +54,7 @@ test("native app keeps the same grouped app and POS navigation language", async 
   assert.match(nativeSource, /permissions\?: string\[\]/);
   assert.match(nativeSource, /function canUseModule\(user: User, item: Module\)/);
   assert.match(nativeSource, /canUseModule\(me\.user, item\)/);
+  assert.match(nativeSource, /\[preview,\s*me\.user\]/);
   assert.match(nativeSource, /grouped\.length\}\s*groepe/);
 });
 
