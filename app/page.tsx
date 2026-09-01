@@ -716,10 +716,11 @@ export default function HomePage() {
   useEffect(() => {
     const timer = setTimeout(() => setBooting(false), 1250);
     const boot = queueMicrotask(() => void loadMe());
-    void loadHealth();
+    const health = queueMicrotask(() => void loadHealth());
     return () => {
       clearTimeout(timer);
       void boot;
+      void health;
     };
   }, []);
   useEffect(() => {

@@ -60,7 +60,10 @@ export default function StatusPage() {
   }
 
   useEffect(() => {
-    void loadHealth();
+    const health = queueMicrotask(() => void loadHealth());
+    return () => {
+      void health;
+    };
   }, []);
 
   const checks = health ? Object.entries(health.checks) : [];
