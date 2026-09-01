@@ -927,7 +927,7 @@ function Splash() {
 
 export default function HomePage() {
   const [booting, setBooting] = useState(true),
-    [view, setView] = useState<AuthView>("welcome"),
+    [view, setView] = useState<AuthView>(() => (typeof window !== "undefined" && isAppDeepLinkPath(window.location.pathname) ? "login" : "welcome")),
     [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(""),
     [error, setError] = useState(""),
@@ -944,6 +944,10 @@ export default function HomePage() {
       setView(data.user.verified || data.user.source === "staff" ? "welcome" : "verify");
     } catch {
       setMe(null);
+      if (typeof window !== "undefined" && isAppDeepLinkPath(window.location.pathname)) {
+        setView("login");
+        setMessage("Teken in om hierdie app-afdeling oop te maak.");
+      }
     }
   };
   const loadHealth = async () => {
@@ -1631,6 +1635,10 @@ function pageFromBrowserPath(pathname: string): AppPage {
   if (pathname === "/perde" || pathname === "/horses") return "horses";
   if (pathname === "/verhurings") return "rentals";
   return "home";
+}
+
+function isAppDeepLinkPath(pathname: string) {
+  return pageFromBrowserPath(pathname) !== "home";
 }
 
 function pagePath(page: AppPage) {
