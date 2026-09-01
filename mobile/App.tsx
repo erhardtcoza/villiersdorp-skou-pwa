@@ -30,6 +30,7 @@ const modules: readonly Module[] = [
   { key: "membership", icon: "🪪", title: "Lidmaatskap", detail: "Sluit aan, hernu of vra lidmaatskap-hulp", roles: ["visitor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/raak-n-lid" },
   { key: "programme", icon: "📅", title: "Skouprogram", detail: "Tye, verhoë en hoogtepunte", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/#program" },
   { key: "map", icon: "🗺️", title: "Skoukaart", detail: "Hekke, arenas, stalletjies en geriewe", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/vendors" },
+  { key: "photos", icon: "🖼️", title: "Skoufoto’s", detail: "Foto’s en albums van die Skou", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=photos" },
   { key: "wallet", icon: "💳", title: "Skoubeursie", detail: "Balans, kaart en transaksies", roles: ["visitor", "committee"] },
   { key: "vendor-application", icon: "🏪", title: "My Aansoek", detail: "Stalletjie-aansoek en status", roles: ["vendor", "committee"], href: "https://app.villiersdorpskou.co.za/?module=vendor-application", permissions: ["vendors_applications", "vendors_approve"] },
   { key: "vendor-profile", icon: "🏪", title: "Uitstallerprofiel", detail: "Besigheid- en stalletjie-inligting", roles: ["vendor", "committee"], href: "https://app.villiersdorpskou.co.za/?module=vendor-profile", permissions: ["vendors_applications", "vendors_approve"] },
@@ -46,7 +47,13 @@ const modules: readonly Module[] = [
   { key: "horse-programme", icon: "📅", title: "Perdeprogram", detail: "Publieke program, klasse en tye", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/perde" },
   { key: "venue-booking", icon: "🏛️", title: "Terreinbespreking", detail: "Bespreek terrein, arena of saal", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/terreinbesprekings" },
   { key: "rentals", icon: "🏛️", title: "Verhuring-aansoek", detail: "Verhurings, besprekings en opvolg", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/verhurings" },
+  { key: "venue-approvals", icon: "📋", title: "Terreingoedkeurings", detail: "Hersien terreinversoeke en opvolgstatus", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=venue-approvals", permissions: ["grounds_venues", "grounds_facilities"] },
   { key: "rental-approvals", icon: "📋", title: "Verhuring-goedkeuring", detail: "Personeel queue en goedkeurings", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/verhurings", permissions: ["rentals_manage", "grounds_venues", "grounds_facilities"] },
+  { key: "buildings", icon: "🏠", title: "Geboue", detail: "Geboue, sale en terrein gereedheid", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=buildings", permissions: ["buildings_manage", "grounds_facilities"] },
+  { key: "finance", icon: "💼", title: "Finansies", detail: "Invoices, betalings, bank recon en verslae", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=finance", permissions: ["finance_reconcile", "finance_reports", "vendors_invoices", "bar_cashup"] },
+  { key: "meetings", icon: "🗓️", title: "Vergaderings", detail: "Agendas, RSVP’s en dokumente", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=meetings", permissions: ["meetings_manage"] },
+  { key: "krymekaar", icon: "🏆", title: "Krymekaar & Slaglam", detail: "Veiling, event en eie vermaak", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=krymekaar", permissions: ["krymekaar_manage", "entertainment_programme"] },
+  { key: "users", icon: "👤", title: "Gebruikers & Rolle", detail: "Bestuur personeeltoegang en regte", roles: ["committee"], href: "https://app.villiersdorpskou.co.za/?module=users", permissions: ["access_manage"] },
   { key: "operations", icon: "📊", title: "Operasies", detail: "Bywoning, verkope en stelselgesondheid", roles: ["staff", "committee"], href: "https://www.villiersdorpskou.co.za/admin#posv1", permissions: ["ops_reports"] },
 ] as const;
 
@@ -55,8 +62,9 @@ const moduleGroups: readonly ModuleGroup[] = [
   { key: "pos-access", icon: "📷", title: "POS & Toegang", detail: "Hek, Kroeg, Kombuis en scan workflows vir personeel.", roles: ["staff", "committee"], modules: ["pos", "bar-pos", "kitchen-pos", "gates", "bar", "operations"] },
   { key: "horses", icon: "🏆", title: "Perde", detail: "Doen aansoek, sien program, of verwerk aansoeke met regte.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["horse-apply", "horse-processing", "horse-programme"] },
   { key: "vendors", icon: "🏪", title: "Uitstallers", detail: "Aansoeke, profiel, span, hekpasse en verwerking.", roles: ["vendor", "staff", "committee"], modules: ["vendor-application", "vendor-profile", "vendor-team", "passes", "applications"] },
-  { key: "grounds", icon: "🏛️", title: "Terrein & Verhurings", detail: "Verhurings, terreinbesprekings en goedkeurings.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["venue-booking", "rentals", "rental-approvals"] },
-  { key: "show", icon: "🗺️", title: "Skou-inligting", detail: "Program, kaart en publieke inligting.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["programme", "map"] },
+  { key: "grounds", icon: "🏛️", title: "Terrein & Verhurings", detail: "Terreinbesprekings, geboue, verhurings en goedkeurings.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["venue-booking", "rentals", "venue-approvals", "rental-approvals", "buildings"] },
+  { key: "show", icon: "🗺️", title: "Skou-inligting", detail: "Program, kaart, foto’s en publieke inligting.", roles: ["visitor", "vendor", "staff", "committee"], modules: ["programme", "map", "photos"] },
+  { key: "management", icon: "🛡️", title: "Bestuur", detail: "Finansies, vergaderings, komitees, gebruikers en spesiale events.", roles: ["staff", "committee"], modules: ["finance", "meetings", "krymekaar", "users"] },
 ] as const;
 
 function canUseModule(user: User, item: Module) {
