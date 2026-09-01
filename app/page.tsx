@@ -894,9 +894,19 @@ export default function HomePage() {
       window.history.replaceState({}, "", "/kaartjies");
       return;
     }
+    if (payment === "failed" && ticketCode) {
+      queueMicrotask(() => setMessage("Die kaartjie-betaling het misluk; probeer weer of kies ’n ander betaalmetode."));
+      window.history.replaceState({}, "", "/kaartjies");
+      return;
+    }
     if (!topupId || !payment) return;
     if (payment === "cancelled") {
       queueMicrotask(() => setMessage("Die betaling is gekanselleer; jou beursiebalans het nie verander nie."));
+      window.history.replaceState({}, "", "/");
+      return;
+    }
+    if (payment === "failed") {
+      queueMicrotask(() => setMessage("Die beursie-aanvulling het misluk; jou balans het nie verander nie."));
       window.history.replaceState({}, "", "/");
       return;
     }
