@@ -52,6 +52,14 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /key:\s*"wallet-topup"[\s\S]*?status:\s*"live"/);
   assert.match(source, /key:\s*"photos"[\s\S]*?status:\s*"live"/);
   assert.match(source, /moduleKey === "photos"[\s\S]*<PhotosFlow/);
+  assert.match(source, /key:\s*"programme"[\s\S]*?status:\s*"live"/);
+  assert.match(source, /key:\s*"map"[\s\S]*?status:\s*"live"/);
+  assert.match(source, /moduleKey === "programme"[\s\S]*<ProgrammePanel/);
+  assert.match(source, /moduleKey === "map"[\s\S]*<ShowMapPanel/);
+  assert.match(source, /api\(`\/api\/public\/programme/);
+  assert.match(source, /api\(`\/api\/public\/horse-show/);
+  assert.match(source, /api\(`\/api\/public\/show-sections/);
+  assert.match(source, /api\(`\/api\/public\/vendors/);
   assert.match(source, /api\("\/api\/app\/photos"/);
   assert.match(source, /form\.set\("file",\s*file\)/);
   assert.match(source, /init\?\.body instanceof FormData/);
@@ -89,6 +97,9 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /moduleKey === "pos"[\s\S]*option\.key === "wallet-topup"/);
   assert.match(source, /page === "pos"[\s\S]*title="Kies POS-afdeling"[\s\S]*<PosLauncherPanel moduleKey="pos-menu" ModuleIcon=\{ScanLine\} \/>/);
   assert.match(source, /kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling/);
+  const appModuleSource = source.slice(source.indexOf("const appModules:"), source.indexOf("const appModuleGroups:"));
+  assert.doesNotMatch(appModuleSource, /https:\/\/www\.villiersdorpskou\.co\.za/);
+  assert.doesNotMatch(appModuleSource, /https:\/\/tickets\.villiersdorpskou\.co\.za\/(?:app|scan)/);
 });
 
 test("native app keeps the same grouped app and POS navigation language", async () => {
@@ -114,9 +125,11 @@ test("native app keeps the same grouped app and POS navigation language", async 
   assert.match(nativeSource, /roles:\s*\["vendor",\s*"staff",\s*"committee"\],\s*modules:\s*\["vendor-application",\s*"vendor-profile",\s*"vendor-team",\s*"passes",\s*"applications"\]/);
   assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=vendor-application/);
   assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=applications/);
-  for (const deepLink of ["photos", "venue-approvals", "buildings", "finance", "meetings", "krymekaar", "users"]) {
+  for (const deepLink of ["membership", "programme", "map", "photos", "venue-approvals", "buildings", "finance", "meetings", "krymekaar", "users", "reports"]) {
     assert.match(nativeSource, new RegExp(`https:\\/\\/app\\.villiersdorpskou\\.co\\.za\\/\\?module=${deepLink}`));
   }
+  assert.doesNotMatch(nativeSource, /https:\/\/www\.villiersdorpskou\.co\.za/);
+  assert.doesNotMatch(nativeSource, /https:\/\/tickets\.villiersdorpskou\.co\.za\/(?:app|scan)/);
   assert.match(nativeSource, /modules:\s*\["pos",\s*"bar-pos",\s*"wallet-topup",\s*"kitchen-pos",\s*"gates",\s*"bar",\s*"operations"\]/);
   assert.match(nativeSource, /roles:\s*\["staff",\s*"committee"\],\s*modules:\s*\["finance",\s*"meetings",\s*"krymekaar",\s*"users"\]/);
 });

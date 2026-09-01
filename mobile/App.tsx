@@ -27,9 +27,9 @@ type ModuleGroup = { key: string; icon: string; title: string; detail: string; r
 const modules: readonly Module[] = [
   { key: "tickets", icon: "🎟️", title: "My Kaartjies", detail: "Koop, wys en bestuur jou QR-kaartjies", roles: ["visitor", "vendor", "staff", "committee"] },
   { key: "family", icon: "👨‍👩‍👧‍👦", title: "My Familie", detail: "Gesinslede en kaartjiehouers", roles: ["visitor", "committee"] },
-  { key: "membership", icon: "🪪", title: "Lidmaatskap", detail: "Sluit aan, hernu of vra lidmaatskap-hulp", roles: ["visitor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/raak-n-lid" },
-  { key: "programme", icon: "📅", title: "Skouprogram", detail: "Tye, verhoë en hoogtepunte", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/#program" },
-  { key: "map", icon: "🗺️", title: "Skoukaart", detail: "Hekke, arenas, stalletjies en geriewe", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/vendors" },
+  { key: "membership", icon: "🪪", title: "Lidmaatskap", detail: "Sluit aan, hernu of vra lidmaatskap-hulp", roles: ["visitor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=membership" },
+  { key: "programme", icon: "📅", title: "Skouprogram", detail: "Tye, verhoë en hoogtepunte", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=programme" },
+  { key: "map", icon: "🗺️", title: "Skoukaart", detail: "Hekke, arenas, stalletjies en geriewe", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=map" },
   { key: "photos", icon: "🖼️", title: "Skoufoto’s", detail: "Foto’s en albums van die Skou", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=photos" },
   { key: "wallet", icon: "💳", title: "Skoubeursie", detail: "Balans, kaart en transaksies", roles: ["visitor", "committee"] },
   { key: "vendor-application", icon: "🏪", title: "My Aansoek", detail: "Stalletjie-aansoek en status", roles: ["vendor", "committee"], href: "https://app.villiersdorpskou.co.za/?module=vendor-application", permissions: ["vendors_applications", "vendors_approve"] },
@@ -55,7 +55,7 @@ const modules: readonly Module[] = [
   { key: "meetings", icon: "🗓️", title: "Vergaderings", detail: "Agendas, RSVP’s en dokumente", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=meetings", permissions: ["meetings_manage"] },
   { key: "krymekaar", icon: "🏆", title: "Krymekaar & Slaglam", detail: "Veiling, event en eie vermaak", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=krymekaar", permissions: ["krymekaar_manage", "entertainment_programme"] },
   { key: "users", icon: "👤", title: "Gebruikers & Rolle", detail: "Bestuur personeeltoegang en regte", roles: ["committee"], href: "https://app.villiersdorpskou.co.za/?module=users", permissions: ["access_manage"] },
-  { key: "operations", icon: "📊", title: "Operasies", detail: "Bywoning, verkope en stelselgesondheid", roles: ["staff", "committee"], href: "https://www.villiersdorpskou.co.za/admin#posv1", permissions: ["ops_reports"] },
+  { key: "operations", icon: "📊", title: "Operasies", detail: "Bywoning, verkope en stelselgesondheid", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=reports", permissions: ["ops_reports"] },
 ] as const;
 
 const moduleGroups: readonly ModuleGroup[] = [

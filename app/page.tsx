@@ -134,6 +134,45 @@ type AppPosConfig = {
   departments: AppPosDepartment[];
   event?: { id: number; name: string } | null;
 };
+type PublicProgrammeItem = {
+  id: number;
+  day_label?: string | null;
+  starts_at?: string | null;
+  stage?: string | null;
+  notes?: string | null;
+  artist_name?: string | null;
+  photo_url?: string | null;
+  bio?: string | null;
+};
+type PublicHorseProgrammeItem = {
+  id: number;
+  day_label?: string | null;
+  starts_at?: string | null;
+  arena?: string | null;
+  title?: string | null;
+  description?: string | null;
+};
+type PublicShowSection = {
+  id: number;
+  section_key?: string | null;
+  title?: string | null;
+  category?: string | null;
+  summary?: string | null;
+  image_url?: string | null;
+  day_label?: string | null;
+  starts_at?: string | null;
+  venue?: string | null;
+};
+type PublicVendor = {
+  id: number;
+  name: string;
+  stall_type?: string | null;
+  site_no?: string | null;
+  tel?: string | null;
+  email?: string | null;
+  description?: string | null;
+  logo_url?: string | null;
+};
 type VenueRequest = {
   id: number;
   event_name: string;
@@ -344,9 +383,8 @@ const appModules: AppModule[] = [
     detail: "Tye, verhoë en hoogtepunte",
     icon: CalendarDays,
     roles: allViews,
-    href: "https://www.villiersdorpskou.co.za/#program",
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "map",
@@ -354,9 +392,8 @@ const appModules: AppModule[] = [
     detail: "Hekke, arenas, stalletjies en geriewe",
     icon: MapPinned,
     roles: allViews,
-    href: "https://www.villiersdorpskou.co.za/vendors",
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "photos",
@@ -566,7 +603,6 @@ const appModules: AppModule[] = [
     icon: WalletCards,
     roles: ["staff", "committee"],
     permissions: ["finance_reconcile", "finance_reports", "vendors_invoices", "bar_cashup"],
-    href: "https://www.villiersdorpskou.co.za/admin#invoices",
     live: true,
     status: "admin",
   },
@@ -597,7 +633,6 @@ const appModules: AppModule[] = [
     icon: Activity,
     roles: ["staff", "committee"],
     permissions: ["ops_reports"],
-    href: "https://www.villiersdorpskou.co.za/admin#posv1",
     live: true,
     status: "admin",
   },
@@ -608,7 +643,6 @@ const appModules: AppModule[] = [
     icon: CircleUserRound,
     roles: ["committee"],
     permissions: ["access_manage"],
-    href: "https://www.villiersdorpskou.co.za/admin",
     live: true,
     status: "admin",
   },
@@ -2169,6 +2203,10 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
           <WalletFlow wallets={wallets} />
         ) : moduleKey === "photos" ? (
           <PhotosFlow />
+        ) : moduleKey === "programme" ? (
+          <ProgrammePanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
+        ) : moduleKey === "map" ? (
+          <ShowMapPanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : moduleKey === "wallet-topup" ? (
           <PosWalletTopupPanel />
         ) : requestModuleDetails[moduleKey] ? (
@@ -2311,6 +2349,170 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
         <strong>Backend-koppeling</strong>
         <p>Hek en Kroeg gebruik reeds dieselfde POS V1 backend. Kombuis word eers live wanneer die Kombuis group/location/products in admin geskep en getoets is.</p>
       </div>
+    </>
+  );
+}
+
+function ProgrammePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const [programme, setProgramme] = useState<PublicProgrammeItem[]>([]);
+  const [horses, setHorses] = useState<PublicHorseProgrammeItem[]>([]);
+  const [eventName, setEventName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const health = await api("/api/app/health");
+      const eventId = Number(health?.event?.id || 0);
+      setEventName(String(health?.event?.name || ""));
+      const suffix = eventId ? `?event_id=${encodeURIComponent(eventId)}` : "";
+      const [programmeResult, horseResult] = await Promise.all([
+        api(`/api/public/programme${suffix}`),
+        api(`/api/public/horse-show${suffix}`),
+      ]);
+      setProgramme(programmeResult.items || []);
+      setHorses(horseResult.items || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Program kon nie gelaai word nie");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const grouped = new Map<string, Array<{ key: string; title: string; meta: string; notes: string; image?: string | null }>>();
+  for (const item of programme) {
+    const day = item.day_label || "Program";
+    if (!grouped.has(day)) grouped.set(day, []);
+    grouped.get(day)?.push({
+      key: `artist-${item.id}`,
+      title: item.artist_name || "Kunstenaar",
+      meta: [item.starts_at, item.stage].filter(Boolean).join(" · "),
+      notes: item.notes || item.bio || "",
+      image: item.photo_url || "",
+    });
+  }
+  for (const item of horses) {
+    const day = item.day_label || "Perdeprogram";
+    if (!grouped.has(day)) grouped.set(day, []);
+    grouped.get(day)?.push({
+      key: `horse-${item.id}`,
+      title: item.title || "Perdeprogram item",
+      meta: [item.starts_at, item.arena].filter(Boolean).join(" · "),
+      notes: item.description || "",
+    });
+  }
+  return (
+    <>
+      <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+      <p className="eyebrow">Skouprogram</p>
+      <h2>{moduleInfo?.title || "Program, kunstenaars en perde"}</h2>
+      <p className="request-intro">Hierdie skerm lees die live kunstenaars-, program- en perdeprogram data vanaf dieselfde backend as die website, maar bly binne die app.</p>
+      {eventName && <p className="provider-note">Gekoppel aan: {eventName}</p>}
+      {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai program…</p>}
+      {error && <p className="form-error">{error}</p>}
+      {!loading && !error && grouped.size === 0 && (
+        <EmptyState icon={<CalendarDays />} title="Program kom binnekort" text="Geen gepubliseerde kunstenaars- of perdeprogramitems is tans beskikbaar nie. Kontak admin indien dit reeds gepubliseer moes wees." />
+      )}
+      <div className="app-data-list">
+        {Array.from(grouped.entries()).map(([day, items]) => (
+          <section className="app-data-section" key={day}>
+            <h3>{day}</h3>
+            {items.map((item) => (
+              <article className="app-data-card" key={item.key}>
+                {item.image ? <Image unoptimized src={item.image} width={72} height={72} alt="" /> : <span className="app-data-icon"><CalendarDays /></span>}
+                <div>
+                  {item.meta && <small>{item.meta}</small>}
+                  <strong>{item.title}</strong>
+                  {item.notes && <p>{item.notes}</p>}
+                </div>
+              </article>
+            ))}
+          </section>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ShowMapPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const [sections, setSections] = useState<PublicShowSection[]>([]);
+  const [vendors, setVendors] = useState<PublicVendor[]>([]);
+  const [eventName, setEventName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const health = await api("/api/app/health");
+      const eventId = Number(health?.event?.id || 0);
+      setEventName(String(health?.event?.name || ""));
+      const suffix = eventId ? `?event_id=${encodeURIComponent(eventId)}` : "";
+      const [sectionsResult, vendorsResult] = await Promise.all([
+        api(`/api/public/show-sections${suffix}`),
+        api(`/api/public/vendors${eventId ? `?event_id=${encodeURIComponent(eventId)}&page_size=24` : "?page_size=24"}`),
+      ]);
+      setSections(sectionsResult.items || []);
+      setVendors(vendorsResult.items || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Skoukaart data kon nie gelaai word nie");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return (
+    <>
+      <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+      <p className="eyebrow">Skoukaart</p>
+      <h2>{moduleInfo?.title || "Hekke, afdelings en stalletjies"}</h2>
+      <p className="request-intro">Hierdie is die app-interne kaartlys. Dit gebruik die live Skou-afdelings en gepubliseerde uitstallers; ’n finale visuele terrein-map kan later bo-aan hierdie skerm gekoppel word.</p>
+      {eventName && <p className="provider-note">Gekoppel aan: {eventName}</p>}
+      {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai skoukaart…</p>}
+      {error && <p className="form-error">{error}</p>}
+      {!loading && !error && !sections.length && !vendors.length && (
+        <EmptyState icon={<MapPinned />} title="Skoukaart kom binnekort" text="Geen gepubliseerde afdelings of uitstallers is tans gekoppel nie. Kontak admin indien die kaart reeds live moes wees." />
+      )}
+      {!!sections.length && (
+        <div className="app-data-list">
+          <section className="app-data-section">
+            <h3>Afdelings en punte</h3>
+            {sections.map((section) => (
+              <article className="app-data-card" key={section.id}>
+                {section.image_url ? <Image unoptimized src={section.image_url} width={72} height={72} alt="" /> : <span className="app-data-icon"><MapPinned /></span>}
+                <div>
+                  {[section.category, section.day_label, section.starts_at, section.venue].filter(Boolean).length > 0 && <small>{[section.category, section.day_label, section.starts_at, section.venue].filter(Boolean).join(" · ")}</small>}
+                  <strong>{section.title || "Skou-afdeling"}</strong>
+                  {section.summary && <p>{section.summary}</p>}
+                </div>
+              </article>
+            ))}
+          </section>
+        </div>
+      )}
+      {!!vendors.length && (
+        <div className="app-data-list">
+          <section className="app-data-section">
+            <h3>Uitstallers en staanplekke</h3>
+            {vendors.map((vendor) => (
+              <article className="app-data-card" key={vendor.id}>
+                {vendor.logo_url ? <Image unoptimized src={vendor.logo_url} width={72} height={72} alt="" /> : <span className="app-data-icon"><Store /></span>}
+                <div>
+                  {[vendor.stall_type, vendor.site_no ? `Staanplek ${vendor.site_no}` : ""].filter(Boolean).join(" · ") && <small>{[vendor.stall_type, vendor.site_no ? `Staanplek ${vendor.site_no}` : ""].filter(Boolean).join(" · ")}</small>}
+                  <strong>{vendor.name}</strong>
+                  {vendor.description && <p>{vendor.description}</p>}
+                  {[vendor.tel, vendor.email].filter(Boolean).length > 0 && <p>{[vendor.tel, vendor.email].filter(Boolean).join(" · ")}</p>}
+                </div>
+              </article>
+            ))}
+          </section>
+        </div>
+      )}
     </>
   );
 }
