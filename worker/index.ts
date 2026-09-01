@@ -19,6 +19,31 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+const BACKEND_ORIGIN = "https://tickets.villiersdorpskou.co.za";
+
+async function proxyBackend(request: Request, upstreamPath?: string): Promise<Response> {
+  const url = new URL(request.url);
+  const upstream = new URL(upstreamPath || `${url.pathname}${url.search}`, BACKEND_ORIGIN);
+  const headers = new Headers(request.headers);
+  headers.set("host", upstream.host);
+  const response = await fetch(new Request(upstream, {
+    method: request.method,
+    headers,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    redirect: "manual",
+  }));
+  const proxiedHeaders = new Headers(response.headers);
+  proxiedHeaders.set("cache-control", "no-store");
+  const location = proxiedHeaders.get("location");
+  if (location) {
+    const rewritten = location.startsWith(BACKEND_ORIGIN)
+      ? location.replace(BACKEND_ORIGIN, "")
+      : location;
+    proxiedHeaders.set("location", rewritten);
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers: proxiedHeaders });
+}
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -105,23 +130,22 @@ const worker = {
       });
     }
 
+    if (url.pathname === "/pos-terminal") {
+      return proxyBackend(request, `/app${url.search}`);
+    }
+    if (url.pathname === "/scan-terminal") {
+      return proxyBackend(request, `/scan${url.search}`);
+    }
+    if (url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/pos/") || url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/api/pos/") || url.pathname.startsWith("/api/scan/")) {
+      return proxyBackend(request);
+    }
+
     const isAppApi = url.pathname.startsWith("/api/app/");
     const isTicketCatalogue = url.pathname.startsWith("/api/public/events/") && request.method === "GET";
     const isTicketOrder = url.pathname === "/api/public/orders/create" && request.method === "POST";
     const isTicketPayment = url.pathname === "/api/payments/yoco/intent" && request.method === "POST";
     if (isAppApi || isTicketCatalogue || isTicketOrder || isTicketPayment) {
-      const upstream = new URL(url.pathname + url.search, "https://tickets.villiersdorpskou.co.za");
-      const headers = new Headers(request.headers);
-      headers.set("host", upstream.host);
-      const response = await fetch(new Request(upstream, {
-        method: request.method,
-        headers,
-        body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
-        redirect: "manual",
-      }));
-      const proxiedHeaders = new Headers(response.headers);
-      proxiedHeaders.set("cache-control", "no-store");
-      return new Response(response.body, { status: response.status, statusText: response.statusText, headers: proxiedHeaders });
+      return proxyBackend(request);
     }
 
     if (url.pathname === "/_vinext/image") {

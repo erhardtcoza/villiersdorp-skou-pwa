@@ -268,7 +268,7 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "gate-pos",
     title: "Hek POS",
     detail: "Kaartjieverkope, wristband verkope en hek-dagafsluiting.",
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=hek",
+    href: "/pos-terminal?pos_area=hek",
     status: "live",
     badge: "HEK",
   },
@@ -276,7 +276,7 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "bar-pos",
     title: "Kroeg POS",
     detail: "Kroegverkope met Yoco, kontant en beursiebetalings.",
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=kroeg",
+    href: "/pos-terminal?pos_area=kroeg",
     status: "live",
     badge: "KROEG",
   },
@@ -298,7 +298,7 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "gate-scanner",
     title: "Hek scan in / uit",
     detail: "Skandeer QR-kaartjies en hanteer toegang by hekke.",
-    href: "https://tickets.villiersdorpskou.co.za/scan",
+    href: "/scan-terminal",
     status: "live",
     badge: "SCAN",
   },
@@ -412,7 +412,7 @@ const appModules: AppModule[] = [
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["pos_sales"],
-    href: "https://tickets.villiersdorpskou.co.za/app",
+    href: "/pos-terminal?pos_area=hek",
     live: true,
     status: "admin",
   },
@@ -443,7 +443,7 @@ const appModules: AppModule[] = [
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["bar_pos"],
-    href: "https://tickets.villiersdorpskou.co.za/app",
+    href: "/pos-terminal?pos_area=kroeg",
     live: true,
     status: "admin",
   },
@@ -454,7 +454,7 @@ const appModules: AppModule[] = [
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["kitchen_pos"],
-    href: "https://tickets.villiersdorpskou.co.za/app?pos_area=kombuis",
+    href: "/pos-terminal?pos_area=kombuis",
     live: true,
     status: "admin",
   },
@@ -587,7 +587,7 @@ const appModules: AppModule[] = [
     icon: ScanLine,
     roles: ["staff", "committee"],
     permissions: ["gates_scan"],
-    href: "https://tickets.villiersdorpskou.co.za/scan",
+    href: "/scan-terminal",
     live: true,
     status: "admin",
   },
@@ -678,6 +678,19 @@ function hasAnyPermission(user: AppUser, required?: string[]) {
   if (!required?.length) return true;
   if (["admin", "manager"].includes(String(user.role || "").toLowerCase())) return true;
   return required.some((permission) => user.permissions?.includes(permission));
+}
+
+function appLocalPosHref(href?: string | null) {
+  if (!href) return undefined;
+  try {
+    const parsed = new URL(href, "https://app.villiersdorpskou.co.za");
+    if (parsed.pathname === "/app") return `/pos-terminal${parsed.search}`;
+    if (parsed.pathname === "/scan") return `/scan-terminal${parsed.search}`;
+    if (parsed.hostname === "tickets.villiersdorpskou.co.za") return `${parsed.pathname}${parsed.search}`;
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return href;
+  }
 }
 
 const modulePanels: Record<string, { status: string; ready: string[]; next: string[]; action?: string; href?: string }> = {
@@ -2218,7 +2231,7 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
     key: department.area === "hek" ? "gate-pos" : department.area === "kroeg" ? "bar-pos" : department.area === "kombuis" ? "kitchen-pos" : `${department.area}-pos`,
     title: department.title,
     detail: department.detail,
-    href: department.launch_url || undefined,
+    href: appLocalPosHref(department.launch_url),
     status: department.status === "live" ? "live" : "coming",
     badge: department.badge,
   }));
@@ -2295,7 +2308,7 @@ function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey
       <p className="module-availability" data-status={status}>{statusText}</p>
       <p>{panel?.status || moduleInfo?.detail}</p>
       {(moduleInfo?.href || panel?.href) && (
-        <a className="sheet-primary-link module-launch" href={moduleInfo?.href || panel?.href}>
+        <a className="sheet-primary-link module-launch" href={appLocalPosHref(moduleInfo?.href || panel?.href)}>
           {panel?.action || "Maak live skerm oop"} <ArrowRight />
         </a>
       )}

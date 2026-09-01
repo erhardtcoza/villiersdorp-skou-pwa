@@ -64,7 +64,15 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /api\("\/api\/app\/staff\/wallets\/topup"/);
   assert.doesNotMatch(source, /key:\s*"wallet-topup"[\s\S]{0,260}href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/bar\/topup"/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?permissions:\s*\["kitchen_pos"\]/);
-  assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
+  assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?href:\s*"\/pos-terminal\?pos_area=kombuis"/);
+  assert.match(source, /function appLocalPosHref\(href\?: string \| null\)/);
+  assert.match(source, /parsed\.pathname === "\/app"[\s\S]*`\/pos-terminal\$\{parsed\.search\}`/);
+  assert.match(source, /parsed\.pathname === "\/scan"[\s\S]*`\/scan-terminal\$\{parsed\.search\}`/);
+  assert.match(source, /href:\s*"\/pos-terminal\?pos_area=hek"/);
+  assert.match(source, /href:\s*"\/pos-terminal\?pos_area=kroeg"/);
+  assert.match(source, /href:\s*"\/scan-terminal"/);
+  assert.doesNotMatch(source, /href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app/);
+  assert.doesNotMatch(source, /href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/scan/);
   const fallbackPosOptions = source.slice(source.indexOf("const posLaunchOptions:"), source.indexOf("const appModules:"));
   const fallbackKitchenOption = fallbackPosOptions.slice(fallbackPosOptions.indexOf('key: "kitchen-pos"'), fallbackPosOptions.indexOf('key: "gate-scanner"'));
   assert.match(fallbackKitchenOption, /status:\s*"coming"/);
@@ -185,4 +193,16 @@ test("app health route checks the app backend and ticket catalogue", async () =>
   assert.match(workerSource, /https:\/\/tickets\.villiersdorpskou\.co\.za\/api\/public\/health/);
   assert.match(workerSource, /App backend health API is reachable/);
   assert.match(workerSource, /payload\.checks\.ticket_catalogue/);
+});
+
+test("app worker keeps POS and scanner flows under the app domain", async () => {
+  const workerSource = await readFile(path.join(root, "worker/index.ts"), "utf8");
+
+  assert.match(workerSource, /const BACKEND_ORIGIN = "https:\/\/tickets\.villiersdorpskou\.co\.za"/);
+  assert.match(workerSource, /async function proxyBackend\(request: Request, upstreamPath\?: string\)/);
+  assert.match(workerSource, /url\.pathname === "\/pos-terminal"[\s\S]*proxyBackend\(request,\s*`\/app\$\{url\.search\}`\)/);
+  assert.match(workerSource, /url\.pathname === "\/scan-terminal"[\s\S]*proxyBackend\(request,\s*`\/scan\$\{url\.search\}`\)/);
+  assert.match(workerSource, /url\.pathname === "\/app" \|\| url\.pathname === "\/scan" \|\| url\.pathname\.startsWith\("\/pos\/"\)/);
+  assert.match(workerSource, /url\.pathname\.startsWith\("\/api\/auth\/"\)/);
+  assert.match(workerSource, /proxiedHeaders\.set\("location",\s*rewritten\)/);
 });
