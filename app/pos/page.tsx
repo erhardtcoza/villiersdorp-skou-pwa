@@ -1,3 +1,7 @@
 "use client";
 
-export { default } from "../page";
+import HomePage from "../page";
+
+export default function PosPage() {
+  return <HomePage />;
+}
