@@ -128,8 +128,9 @@ const worker = {
     }
 
     const isBackendPage = url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/pos/") || url.pathname.startsWith("/scan/");
+    const isBackendMedia = url.pathname.startsWith("/media/");
     const isBackendApi = url.pathname.startsWith("/api/");
-    if (isBackendPage || isBackendApi) {
+    if (isBackendPage || isBackendMedia || isBackendApi) {
       return proxyBackend(request);
     }
 

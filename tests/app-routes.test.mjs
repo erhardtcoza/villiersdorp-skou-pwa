@@ -216,6 +216,7 @@ test("app worker keeps POS V1 and scanner sessions inside the app domain", async
   assert.match(workerSource, /url\.pathname === "\/scan"/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/pos\/"\)/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/scan\/"\)/);
+  assert.match(workerSource, /url\.pathname\.startsWith\("\/media\/"\)/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(workerSource, /proxiedHeaders\.set\("location",\s*rewritten\)/);
 });
