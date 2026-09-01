@@ -49,32 +49,40 @@ const worker = {
       };
 
       try {
-        const upstreamHealth = await fetch("https://tickets.villiersdorpskou.co.za/api/public/events/villiersdorp-skou-2026", {
+        const backendHealth = await fetch("https://tickets.villiersdorpskou.co.za/api/public/health", {
           headers: { accept: "application/json" },
         });
-        const upstreamBody = await upstreamHealth.json().catch(() => null) as {
+        const backendBody = await backendHealth.json().catch(() => null) as {
           ok?: boolean;
           event?: { id?: number; name?: string; sales_closed?: number | boolean };
-          ticket_types?: unknown[];
+          ticket_types?: number;
+          checks?: Record<string, { status?: "ok" | "warn" | "fail"; detail?: string }>;
         } | null;
-        const ticketTypes = Array.isArray(upstreamBody?.ticket_types) ? upstreamBody.ticket_types.length : 0;
-        const upstreamOk = upstreamHealth.ok && upstreamBody?.ok === true;
+        const ticketTypes = Number(backendBody?.ticket_types || 0);
+        const backendOk = backendHealth.ok && backendBody?.ok === true;
 
         payload.event = {
-          id: upstreamBody?.event?.id,
-          name: upstreamBody?.event?.name,
-          sales_closed: upstreamBody?.event?.sales_closed === true || Number(upstreamBody?.event?.sales_closed || 0) === 1,
+          id: backendBody?.event?.id,
+          name: backendBody?.event?.name,
+          sales_closed: backendBody?.event?.sales_closed === true || Number(backendBody?.event?.sales_closed || 0) === 1,
           ticket_types: ticketTypes,
         };
         payload.checks.backend_api = {
-          status: upstreamOk ? "ok" : "fail",
-          detail: upstreamOk ? "Public ticket API is reachable." : `Public ticket API returned HTTP ${upstreamHealth.status}.`,
+          status: backendOk ? "ok" : "fail",
+          detail: backendOk ? "Backend health API is reachable." : `Backend health API returned HTTP ${backendHealth.status}.`,
         };
         payload.checks.ticket_catalogue = {
           status: ticketTypes > 0 ? "ok" : "warn",
           detail: ticketTypes > 0 ? `${ticketTypes} ticket types available.` : "No public ticket types returned.",
         };
-        payload.ok = upstreamOk && ticketTypes > 0;
+        for (const [key, check] of Object.entries(backendBody?.checks || {})) {
+          if (!check || key === "worker" || key === "database" || key === "current_event" || key === "ticket_catalogue") continue;
+          payload.checks[key] = {
+            status: check.status || "warn",
+            detail: check.detail || "Backend check returned no detail.",
+          };
+        }
+        payload.ok = backendOk && ticketTypes > 0;
       } catch (error) {
         payload.checks.backend_api = {
           status: "fail",
