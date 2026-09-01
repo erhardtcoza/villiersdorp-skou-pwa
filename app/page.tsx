@@ -2107,8 +2107,17 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
     status: department.status === "live" ? "live" : "coming",
     badge: department.badge,
   }));
-  const hasScanner = liveOptions.some((option) => option.key === "gate-scanner");
-  const ordered = [...(liveOptions.length ? [...liveOptions, ...(hasScanner ? [] : posLaunchOptions.filter((option) => option.key === "gate-scanner"))] : posLaunchOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
+  const optionMatchesModule = (option: PosLaunchOption) => {
+    if (moduleKey === "bar-pos") return option.key === "bar-pos";
+    if (moduleKey === "kitchen-pos") return option.key === "kitchen-pos";
+    if (moduleKey === "gates") return option.key === "gate-scanner";
+    if (moduleKey === "pos") return option.key === "gate-pos" || option.key === "gate-scanner";
+    return true;
+  };
+  const scopedLiveOptions = liveOptions.filter(optionMatchesModule);
+  const scopedFallbackOptions = posLaunchOptions.filter(optionMatchesModule);
+  const hasScanner = scopedLiveOptions.some((option) => option.key === "gate-scanner");
+  const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...(hasScanner ? [] : scopedFallbackOptions.filter((option) => option.key === "gate-scanner"))] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
   return (
     <>
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
