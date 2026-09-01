@@ -42,7 +42,7 @@ const modules: readonly Module[] = [
   { key: "horse-programme", icon: "📅", title: "Perdeprogram", detail: "Publieke program, klasse en tye", roles: ["visitor", "vendor", "staff", "committee"], href: "https://www.villiersdorpskou.co.za/perde" },
   { key: "venue-booking", icon: "🏛️", title: "Terreinbespreking", detail: "Bespreek terrein, arena of saal", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/terreinbesprekings" },
   { key: "rentals", icon: "🏛️", title: "Verhuring-aansoek", detail: "Verhurings, besprekings en opvolg", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/verhurings" },
-  { key: "rental-approvals", icon: "📋", title: "Verhuring-goedkeuring", detail: "Personeel queue en goedkeurings", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/verhurings", permissions: ["rentals_manage", "grounds_venues"] },
+  { key: "rental-approvals", icon: "📋", title: "Verhuring-goedkeuring", detail: "Personeel queue en goedkeurings", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/verhurings", permissions: ["rentals_manage", "grounds_venues", "grounds_facilities"] },
   { key: "operations", icon: "📊", title: "Operasies", detail: "Bywoning, verkope en stelselgesondheid", roles: ["staff", "committee"], href: "https://www.villiersdorpskou.co.za/admin#posv1", permissions: ["ops_reports"] },
 ] as const;
 

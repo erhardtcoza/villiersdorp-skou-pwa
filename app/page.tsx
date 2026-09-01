@@ -472,7 +472,7 @@ const appModules: AppModule[] = [
     detail: "Hersien app-verhuringversoeke en opvolgstatus",
     icon: ClipboardCheck,
     roles: ["staff", "committee"],
-    permissions: ["rentals_manage", "grounds_venues"],
+    permissions: ["rentals_manage", "grounds_venues", "grounds_facilities"],
     href: "https://www.villiersdorpskou.co.za/admin#app",
     live: true,
     status: "live",

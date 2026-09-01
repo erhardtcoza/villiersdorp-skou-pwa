@@ -109,6 +109,16 @@ test("web and native menus preserve backend admin and manager all-access semanti
   assert.match(nativeSource, /if \(\["admin", "manager"\]\.includes\(user\.role\)\) return true/);
 });
 
+test("venue and rental review menus match backend review permissions", async () => {
+  const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
+  const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
+  const backendSource = await readFile(path.join(root, "../vill-skou-events-dev-live/src/routes/app_auth.js"), "utf8");
+
+  assert.match(backendSource, /function canReviewVenueRequests[\s\S]*\["grounds_venues", "grounds_facilities", "rentals_manage"\]/);
+  assert.match(webSource, /key:\s*"rental-approvals"[\s\S]*permissions:\s*\["rentals_manage",\s*"grounds_venues",\s*"grounds_facilities"\]/);
+  assert.match(nativeSource, /key:\s*"rental-approvals"[\s\S]*permissions:\s*\["rentals_manage",\s*"grounds_venues",\s*"grounds_facilities"\]/);
+});
+
 test("bar refund clients surface backend failures and reuse refund keys while busy", async () => {
   const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
