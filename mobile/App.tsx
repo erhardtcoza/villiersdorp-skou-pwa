@@ -225,7 +225,7 @@ function ModuleScreen({ screen, me, token, actualView, preview, onPreview, onBac
   const paymentLabel = (transaction: BarTransaction) => !transaction.payment ? "Geen betaling" : transaction.payment.method === "event_balance" ? "Skoubeursie" : transaction.payment.method.includes("yoco") || transaction.payment.provider === "yoco" ? "Yoco-kaart" : transaction.payment.method;
   const submitBarRefund = async (transaction: BarTransaction) => {
     const reason = String(refundReason[transaction.id] || "").trim();
-    if (!reason) {
+    if (reason.length < 3) {
       Alert.alert("Rede nodig", "Gee asseblief ’n kort rede vir die refund.");
       return;
     }
