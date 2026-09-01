@@ -85,6 +85,22 @@ type PosLaunchOption = {
   status: "live" | "coming";
   badge: string;
 };
+type AppPosDepartment = {
+  area: string;
+  title: string;
+  detail: string;
+  badge: string;
+  status: "live" | "coming" | "not_configured";
+  location_count: number;
+  product_count: number;
+  primary_location_id: number | null;
+  launch_url: string | null;
+};
+type AppPosConfig = {
+  ok: boolean;
+  departments: AppPosDepartment[];
+  event?: { id: number; name: string } | null;
+};
 type VenueRequest = {
   id: number;
   event_name: string;
@@ -1997,8 +2013,39 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
 }
 
 function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: string; moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const [config, setConfig] = useState<AppPosConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const preferred = moduleKey === "bar-pos" ? "bar-pos" : moduleKey === "kitchen-pos" ? "kitchen-pos" : moduleKey === "gates" ? "gate-scanner" : "gate-pos";
-  const ordered = [...posLaunchOptions].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const result = await api("/api/app/pos/config");
+        if (active) setConfig(result);
+      } catch (err) {
+        if (active) setError(err instanceof Error ? err.message : "POS-afdelings kon nie gelaai word nie");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+  const liveOptions: PosLaunchOption[] = (config?.departments || []).map((department) => ({
+    key: department.area === "hek" ? "gate-pos" : department.area === "kroeg" ? "bar-pos" : department.area === "kombuis" ? "kitchen-pos" : `${department.area}-pos`,
+    title: department.title,
+    detail: department.detail,
+    href: department.launch_url || undefined,
+    status: department.status === "live" ? "live" : "coming",
+    badge: department.badge,
+  }));
+  const hasScanner = liveOptions.some((option) => option.key === "gate-scanner");
+  const ordered = [...(liveOptions.length ? [...liveOptions, ...(hasScanner ? [] : posLaunchOptions.filter((option) => option.key === "gate-scanner"))] : posLaunchOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
   return (
     <>
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
@@ -2008,6 +2055,9 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
         Mobiele launch-pad vir personeel se verkoop- en toegangskerms.
       </p>
       <p>Die PWA hou die menu skoon, maar gee personeel een plek om die regte POS-afdeling oop te maak. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
+      {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-afdelings…</p>}
+      {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Die veilige standaard-skakels bly beskikbaar.</p>}
+      {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}
       <div className="pos-launch-grid">
         {ordered.map((option) => (
           option.href ? (
