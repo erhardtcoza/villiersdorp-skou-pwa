@@ -13,6 +13,75 @@
   color: inherit;
   text-decoration: none;
 }
+.module-group-list {
+  display: grid;
+  gap: 12px;
+}
+.module-group-card {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #fff;
+}
+.module-group-card > header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 11px;
+}
+.module-group-card > header strong,
+.module-group-card > header small {
+  display: block;
+}
+.module-group-card > header strong {
+  font-size: 15px;
+}
+.module-group-card > header small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.module-group-card > header b {
+  min-width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #0f4b2b;
+  background: #edf6ef;
+  font-size: 11px;
+}
+.module-group-card > div {
+  display: grid;
+  gap: 7px;
+}
+.module-card.compact {
+  min-height: auto;
+  padding: 11px;
+  border-radius: 14px;
+  box-shadow: none;
+  background: #fffefb;
+}
+.module-card.compact .module-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.module-card.compact .module-icon svg {
+  width: 18px;
+}
+.module-card.compact .module-copy strong {
+  font-size: 13px;
+}
+.module-card.compact .module-copy small {
+  font-size: 9px;
+}
+.module-card.compact .module-copy em {
+  margin-top: 5px;
+}
 .live-summary {
   display: grid;
   grid-template-columns: 1fr 1fr;

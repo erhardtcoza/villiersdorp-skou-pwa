@@ -58,6 +58,14 @@ type AuthView = "welcome" | "login" | "register" | "verify" | "forgot" | "reset-
 type AppTab = "home" | "messages" | "calendar" | "profile";
 type AppPage = "home" | "tickets" | "venues" | "bar";
 type RoleView = "visitor" | "vendor" | "staff" | "committee";
+type AppModuleGroup = {
+  key: string;
+  title: string;
+  detail: string;
+  icon: LucideIcon;
+  roles: RoleView[];
+  modules: string[];
+};
 type AppModule = {
   key: string;
   title: string;
@@ -271,8 +279,8 @@ const appModules: AppModule[] = [
   },
   {
     key: "pos",
-    title: "Verkooppunt",
-    detail: "Verkope, kasse en dagafsluiting",
+    title: "Hek POS",
+    detail: "Hekkaartjies, verkope en dagafsluiting",
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["pos_sales", "bar_pos"],
@@ -282,13 +290,34 @@ const appModules: AppModule[] = [
   },
   {
     key: "bar-transactions",
-    title: "Kroeg",
+    title: "Kroeg transaksies",
     detail: "Laaste transaksies en gemagtigde refunds",
     icon: Activity,
     roles: ["staff", "committee"],
     permissions: ["bar_transactions", "bar_refunds"],
     live: true,
     status: "live",
+  },
+  {
+    key: "bar-pos",
+    title: "Kroeg POS",
+    detail: "Kroegverkope, Yoco en beursiebetalings",
+    icon: Store,
+    roles: ["staff", "committee"],
+    permissions: ["bar_pos", "pos_sales"],
+    href: "https://tickets.villiersdorpskou.co.za/app",
+    live: true,
+    status: "admin",
+  },
+  {
+    key: "kitchen-pos",
+    title: "Kombuis POS",
+    detail: "Kombuisverkope en toekomstige afdelings",
+    icon: Store,
+    roles: ["staff", "committee"],
+    permissions: ["pos_sales", "bar_pos"],
+    live: false,
+    status: "coming",
   },
   {
     key: "applications",
@@ -303,14 +332,33 @@ const appModules: AppModule[] = [
   },
   {
     key: "horses",
-    title: "Perdeskou",
+    title: "Doen perde-aansoek",
     detail: "Inskrywings, klasse en dokumente",
     icon: Trophy,
+    roles: allViews,
+    live: true,
+    status: "live",
+  },
+  {
+    key: "horse-processing",
+    title: "Verwerk perde-aansoeke",
+    detail: "Personeel verwerking, goedkeuring en fakture",
+    icon: ClipboardCheck,
     roles: ["staff", "committee"],
     permissions: ["horses_entries", "horses_approve", "horses_programme"],
     href: "https://www.villiersdorpskou.co.za/admin#horses",
     live: true,
-    status: "live",
+    status: "admin",
+  },
+  {
+    key: "horse-programme",
+    title: "Perdeprogram",
+    detail: "Publieke program, klasse en tye",
+    icon: CalendarDays,
+    roles: allViews,
+    href: "https://www.villiersdorpskou.co.za/perde",
+    live: true,
+    status: "admin",
   },
   {
     key: "venues",
@@ -342,13 +390,23 @@ const appModules: AppModule[] = [
   },
   {
     key: "rentals",
-    title: "Verhurings",
+    title: "Verhuring-aansoek",
     detail: "Verhurings, besprekings en opvolg",
     icon: Landmark,
-    roles: ["staff", "committee"],
-    permissions: ["rentals_manage", "grounds_venues"],
+    roles: allViews,
     live: true,
     status: "live",
+  },
+  {
+    key: "rental-approvals",
+    title: "Verhuring-goedkeuring",
+    detail: "Hersien versoeke, pryse en fakture",
+    icon: ClipboardCheck,
+    roles: ["staff", "committee"],
+    permissions: ["rentals_manage", "grounds_venues"],
+    href: "https://www.villiersdorpskou.co.za/admin#app",
+    live: true,
+    status: "admin",
   },
   {
     key: "krymekaar",
@@ -416,6 +474,65 @@ const appModules: AppModule[] = [
   },
 ];
 
+const appModuleGroups: AppModuleGroup[] = [
+  {
+    key: "visitor",
+    title: "Kaartjies & Beursie",
+    detail: "Koop kaartjies, wys QR’s, bestuur familie en laai beursie.",
+    icon: Ticket,
+    roles: allViews,
+    modules: ["tickets", "wallet", "family", "membership"],
+  },
+  {
+    key: "pos-access",
+    title: "POS & Toegang",
+    detail: "Hek, kroeg, kombuis en scan workflows vir personeel.",
+    icon: ScanLine,
+    roles: ["staff", "committee"],
+    modules: ["pos", "bar-pos", "kitchen-pos", "gates", "bar-transactions", "reports"],
+  },
+  {
+    key: "horses",
+    title: "Perde",
+    detail: "Aansoeke, klasse, program en personeelverwerking.",
+    icon: Trophy,
+    roles: ["visitor", "staff", "committee"],
+    modules: ["horses", "horse-processing", "horse-programme"],
+  },
+  {
+    key: "vendors",
+    title: "Uitstallers",
+    detail: "Aansoeke, profiel, span, hekpasse en admin verwerking.",
+    icon: Store,
+    roles: ["vendor", "staff", "committee"],
+    modules: ["vendor-application", "vendor-profile", "vendor-team", "passes", "applications"],
+  },
+  {
+    key: "grounds",
+    title: "Terrein & Verhurings",
+    detail: "Terreinbesprekings, geboue, verhurings en goedkeurings.",
+    icon: Landmark,
+    roles: allViews,
+    modules: ["venues", "rentals", "venue-approvals", "rental-approvals", "buildings"],
+  },
+  {
+    key: "show",
+    title: "Skou-inligting",
+    detail: "Program, kaart en foto’s vir besoekers en bestuur.",
+    icon: MapPinned,
+    roles: allViews,
+    modules: ["programme", "map", "photos"],
+  },
+  {
+    key: "management",
+    title: "Bestuur",
+    detail: "Finansies, vergaderings, komitees, gebruikers en spesiale events.",
+    icon: ShieldCheck,
+    roles: ["staff", "committee"],
+    modules: ["finance", "meetings", "krymekaar", "users"],
+  },
+];
+
 function hasAnyPermission(user: AppUser, required?: string[]) {
   if (!required?.length) return true;
   return required.some((permission) => user.permissions?.includes(permission));
@@ -465,10 +582,21 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     next: ["Koppel passes aan vendor/perde/staff records", "Maak QR/NFC compatible", "Laat hek scanner dit valideer"],
   },
   pos: {
-    status: "POS V1 is live as aparte bedienerskerm vir controlled testing. Die app wys nou ’n veilige launch-pad in plaas van ’n dooie menu.",
-    ready: ["Open live POS", "Terminal lease en wallet guard bly op backend", "POS/scan toegang word deur server sessie beheer"],
-    next: ["Voltooi POS merge", "Finaliseer Yoco terminal/live refund flow", "Voltooi real-device tablet testing"],
-    action: "Maak POS oop",
+    status: "Hek POS gebruik tans POS V1 as die betroubare verkoopskerm vir hekkaartjies, terminal leases, Yoco/manual betalings en beursie-guards.",
+    ready: ["Open live Hek POS", "Terminal lease en wallet guard bly op backend", "POS/scan toegang word deur server sessie beheer"],
+    next: ["Maak Hek POS app-native", "Finaliseer Yoco terminal/live refund flow", "Voltooi real-device tablet testing"],
+    action: "Maak Hek POS oop",
+  },
+  "kitchen-pos": {
+    status: "Kombuis POS is as afdeling opsie gereserveer. Dit moet dieselfde POS backend gebruik as Hek/Kroeg, met eie produkte, sessies en dagafsluiting.",
+    ready: ["Menu-slot bestaan", "Kan dieselfde POS V1 backend model gebruik", "Kan later addisionele afdelings bykry sonder om die app hoofmenu vol te maak"],
+    next: ["Skep Kombuis POS group/location/products", "Koppel app launch aan daardie afdeling", "Toets aparte cash-up en reports"],
+  },
+  "bar-pos": {
+    status: "Kroeg POS launch tans na die bestaande POS V1 skerm. Die kassier kies/gebruik die kroeg afdeling daar totdat die app-native POS klaar is.",
+    ready: ["Open live POS vir kroegverkope", "Yoco/manual/wallet betalings bly server-side", "Kroeg transaksies en refunds het ’n aparte app skerm"],
+    next: ["Launch direk in Main Bar/Kroeg konteks", "Maak produkfilters app-native", "Koppel real Yoco refunds"],
+    action: "Maak Kroeg POS oop",
   },
   applications: {
     status: "Uitstaller-aansoeke word tans in die hoof admin bestuur. Die app-module is net vir toegewyde staff/committee sigbaar.",
@@ -477,10 +605,21 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     action: "Maak vendor admin oop",
   },
   horses: {
-    status: "Perde is in die access model ingebou. Die volledige perde app-flow wag nog vir die afdeling se finale antwoorde/goedkeuring.",
-    ready: ["Perde afdeling en permissions bestaan", "Menu kan net aan Perde users gewys word"],
-    next: ["Koppel vorige vertoners", "Bou inskrywings/klasse/fakture", "Koppel programme en bandjies"],
+    status: "Gebruik hierdie vir ’n nuwe perde-aansoek of inskrywingsnavraag. Dit gaan na dieselfde backend app-versoek queue vir opvolg.",
+    ready: ["Visitors kan ’n perde-versoek uit die app stuur", "Perde afdeling en permissions bestaan", "Public perdeblad en admin verwerking bestaan"],
+    next: ["Koppel direk aan horse application tables", "Koppel vorige vertoners, klasse, fakture en bandjies"],
+  },
+  "horse-processing": {
+    status: "Personeelverwerking bly tans op die bestaande perde-admin waar aansoeke, goedkeurings, fakture en deposito’s reeds bestuur word.",
+    ready: ["Open bestaande perde-admin", "Perde permissions beskerm toegang", "Aansoeke en fakture bly op een backend"],
+    next: ["Maak die verwerking app-native", "Voeg vinnige goedkeur/afkeur aksies by", "Wys klasse en faktuurstatus in die app"],
     action: "Maak perde admin oop",
+  },
+  "horse-programme": {
+    status: "Die publieke perdeprogram is reeds beskikbaar en bly op /perde en /horses. Die app kan dit as aparte subopsie oopmaak.",
+    ready: ["Open publieke perdeprogram", "Werk vir visitors en personeel", "Hou /perde en /horses beskikbaar"],
+    next: ["Koppel app-native programme filter", "Wys dag/klas/arena filters", "Laat personeel program updates voorstel"],
+    action: "Maak perdeprogram oop",
   },
   "venue-approvals": {
     status: "Terreinbesprekings kan deur visitors ingedien word en admin kan dit nou op dieselfde backend rekord hersien en status verander.",
@@ -495,9 +634,15 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     next: ["Bou app-native gebou take/checklists", "Koppel aan verhurings en terreinversoeke", "Voeg verantwoordelike persone per gebou by"],
   },
   rentals: {
-    status: "Verhuring-navrae en opvolg kan nou uit die app gestuur word en deur admin opgevolg word.",
-    ready: ["Permission-gated app menu", "Dien verhuring-opvolg in", "Kan terreinbesprekings as bron gebruik"],
+    status: "Verhuring-aansoeke en opvolg kan nou uit die app gestuur word en deur admin opgevolg word.",
+    ready: ["Dien verhuring-aansoek uit die app in", "Kan terreinbesprekings as bron gebruik", "Admin sien die versoek in die app queue"],
     next: ["Koppel quote/faktuur na goedkeuring", "Maak huurkontrak/voorwaardes templates", "Wys kalender van verhuring versoeke"],
+  },
+  "rental-approvals": {
+    status: "Goedkeuring bly tans by die bestaande admin/app-versoeke sodat bestuur eers pryse, voorwaardes en fakture kan bevestig.",
+    ready: ["Open app-admin versoeke", "Permission-gated vir Gronde/Verhurings", "Kan status terugskryf na die app"],
+    next: ["Maak approval queue app-native", "Skep faktuur vanaf goedgekeurde aansoek", "Wys kalender en betalingstatus"],
+    action: "Maak goedkeurings oop",
   },
   krymekaar: {
     status: "Krymekaar/Slaglam versoeke en programnotas kan nou uit die app ingestuur word.",
@@ -658,16 +803,24 @@ const requestModuleDetails: Record<string, ServiceModuleConfig> = {
 };
 
 async function api(path: string, init?: RequestInit) {
-  const response = await fetch(path, {
-    ...init,
-    credentials: "same-origin",
-    headers: { "content-type": "application/json", ...(init?.headers || {}) },
-  });
-  const data = await response.json().catch(() => ({
-    ok: false,
-    error: "Die bediener het nie korrek geantwoord nie",
-  }));
-  if (!response.ok) throw new Error(data.error || "Iets het verkeerd geloop");
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      credentials: "same-origin",
+      signal: init?.signal || controller.signal,
+      headers: { "content-type": "application/json", ...(init?.headers || {}) },
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw new Error("Die versoek het te lank geneem. Herlaai die blad en probeer weer.");
+    throw err;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+  const data = await response.json().catch(() => ({ ok: false, error: "Die bediener het nie korrek geantwoord nie" }));
+  if (!response.ok) throw new Error(data.error || `Die bediener het HTTP ${response.status} teruggegee`);
   return data;
 }
 
@@ -1183,7 +1336,11 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
     [selected, setSelected] = useState<string | null>(null),
     [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : window.location.pathname === "/kroeg" ? "bar" : "home");
   const walletTotal = wallets.reduce((sum, w) => sum + w.balance_cents, 0),
-    visible = appModules.filter((item) => item.roles.includes(preview) && hasAnyPermission(user, item.permissions));
+    visible = appModules.filter((item) => item.roles.includes(preview) && hasAnyPermission(user, item.permissions)),
+    grouped = appModuleGroups
+      .filter((group) => group.roles.includes(preview))
+      .map((group) => ({ ...group, items: group.modules.map((key) => visible.find((item) => item.key === key)).filter((item): item is AppModule => Boolean(item)) }))
+      .filter((group) => group.items.length > 0);
   const pageFromPath = () => window.location.pathname === "/kaartjies" ? "tickets" : window.location.pathname === "/terreinbesprekings" ? "venues" : window.location.pathname === "/kroeg" ? "bar" : "home";
   const navigatePage = (next: AppPage, replace = false) => {
     const path = next === "tickets" ? "/kaartjies" : next === "venues" ? "/terreinbesprekings" : next === "bar" ? "/kroeg" : "/";
@@ -1288,11 +1445,11 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
                 <p className="eyebrow">Jou toegang</p>
                 <h2>Wat wil jy doen?</h2>
               </div>
-              <span>{visible.length} opsies</span>
+              <span>{grouped.length} groepe</span>
             </div>
-            <div className="module-grid">
-              {visible.map((item) => (
-                <AppModuleCard key={item.key} item={item} onOpen={() => openModule(item)} />
+            <div className="module-group-list">
+              {grouped.map((group) => (
+                <AppModuleGroupCard key={group.key} group={group} onOpen={openModule} />
               ))}
             </div>
           </>
@@ -1348,7 +1505,30 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
   );
 }
 
-function AppModuleCard({ item, onOpen }: { item: AppModule; onOpen: () => void }) {
+function AppModuleGroupCard({ group, onOpen }: { group: AppModuleGroup & { items: AppModule[] }; onOpen: (item: AppModule) => void }) {
+  const GroupIcon = group.icon;
+  return (
+    <article className="module-group-card">
+      <header>
+        <span className="module-icon">
+          <GroupIcon />
+        </span>
+        <span>
+          <strong>{group.title}</strong>
+          <small>{group.detail}</small>
+        </span>
+        <b>{group.items.length}</b>
+      </header>
+      <div>
+        {group.items.map((item) => (
+          <AppModuleCard key={item.key} item={item} onOpen={() => onOpen(item)} compact />
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function AppModuleCard({ item, onOpen, compact = false }: { item: AppModule; onOpen: () => void; compact?: boolean }) {
   const Icon = item.icon;
   const status = item.status || (item.live ? "live" : "coming");
   const label = status === "live" ? "Live" : status === "admin" ? "Kontak admin / eksterne skerm" : "Kom binnekort";
@@ -1366,7 +1546,7 @@ function AppModuleCard({ item, onOpen }: { item: AppModule; onOpen: () => void }
     </>
   );
   return (
-    <button className="module-card" onClick={onOpen}>
+    <button className={`module-card${compact ? " compact" : ""}`} onClick={onOpen}>
       {content}
     </button>
   );
@@ -1543,6 +1723,14 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
     const amount = Math.round(Number(refundAmount[transaction.id] || transaction.refundable_cents / 100) * 100);
     const method = refundMethod[transaction.id] || (transaction.payment?.method === "event_balance" ? "wallet" : "card");
     const reason = String(refundReason[transaction.id] || "").trim();
+    if (!Number.isFinite(amount) || amount < 1 || amount > transaction.refundable_cents) {
+      setError("Refund bedrag is ongeldig.");
+      return;
+    }
+    if (reason.length < 3) {
+      setError("Gee asseblief eers ’n rede vir die refund.");
+      return;
+    }
     setBusyRefundId(transaction.id);
     setError("");
     setMessage("");
