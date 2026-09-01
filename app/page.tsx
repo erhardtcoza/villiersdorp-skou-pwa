@@ -1135,8 +1135,9 @@ export default function HomePage() {
     const ticketCode = params.get("code");
     if (payment === "ticket" && ticketCode) {
       queueMicrotask(async () => {
+        await api("/api/payments/yoco/reconcile", { method: "POST", body: JSON.stringify({ code: ticketCode }) }).catch(() => null);
         await loadMe();
-        setMessage("Dankie. Yoco het jou kaartjie-betaling ontvang; jou kaartjies sal hier wys sodra die betaling bevestig is.");
+        setMessage("Dankie. Yoco het jou kaartjie-betaling ontvang; jou kaartjies is nou beskikbaar sodra die bevestiging klaar verwerk is.");
         window.history.replaceState({}, "", "/kaartjies");
       });
       return;
@@ -1359,7 +1360,7 @@ export default function HomePage() {
   };
 
   if (booting) return <Splash />;
-  if (me && (me.user.verified || me.user.source === "staff")) return <Dashboard data={me} message={message} health={health} onLogout={logout} />;
+  if (me && (me.user.verified || me.user.source === "staff")) return <Dashboard data={me} message={message} health={health} onRefresh={loadMe} onLogout={logout} />;
 
   return (
     <main className="app-auth auth-screen">
@@ -1590,7 +1591,7 @@ export default function HomePage() {
   );
 }
 
-function Dashboard({ data, message, health, onLogout }: { data: MeResponse; message: string; health: AppHealth | null; onLogout: () => void }) {
+function Dashboard({ data, message, health, onRefresh, onLogout }: { data: MeResponse; message: string; health: AppHealth | null; onRefresh: () => Promise<void>; onLogout: () => void }) {
   const { user, tickets, wallets } = data;
   const pendingTicketOrders = data.pending_ticket_orders || [];
   const actualView: RoleView = user.role === "visitor" ? "visitor" : ["vendor", "exhibitor", "uitstaller"].includes(user.role) ? "vendor" : ["admin", "committee", "manager"].includes(user.role) ? "committee" : "staff";
@@ -1670,7 +1671,7 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
       <section className="viewport">
         {page === "tickets" ? (
           <AppSubPage eyebrow="My kaartjies" title="Koop of wys kaartjies" icon={Ticket} onBack={() => navigatePage("home")}>
-            <TicketsFlow user={user} tickets={tickets} pendingOrders={pendingTicketOrders} standalone />
+            <TicketsFlow user={user} tickets={tickets} pendingOrders={pendingTicketOrders} onRefresh={onRefresh} standalone />
           </AppSubPage>
         ) : page === "venues" ? (
           <AppSubPage eyebrow="Terreinbesprekings" title="Bespreek die Skouterrein" icon={Landmark} onBack={() => navigatePage("home")}>
@@ -1799,7 +1800,7 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
         <NavButton label="Kalender" icon={CalendarDays} active={page === "home" && tab === "calendar"} onClick={() => chooseTab("calendar")} />
         <NavButton label="Profiel" icon={CircleUserRound} active={page === "home" && tab === "profile"} onClick={() => chooseTab("profile")} />
       </nav>
-      {selected && canOpenModule(selected) && <ModuleSheet moduleKey={selected} user={user} tickets={tickets} pendingOrders={pendingTicketOrders} wallets={wallets} onClose={() => { setSelected(null); window.history.replaceState({}, "", pagePath(page)); }} />}
+      {selected && canOpenModule(selected) && <ModuleSheet moduleKey={selected} user={user} tickets={tickets} pendingOrders={pendingTicketOrders} wallets={wallets} onRefresh={onRefresh} onClose={() => { setSelected(null); window.history.replaceState({}, "", pagePath(page)); }} />}
     </main>
   );
 }
@@ -2222,7 +2223,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
   );
 }
 
-function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onClose }: { moduleKey: string; user: AppUser; tickets: AppTicket[]; pendingOrders: AppPendingTicketOrder[]; wallets: AppWallet[]; onClose: () => void }) {
+function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefresh, onClose }: { moduleKey: string; user: AppUser; tickets: AppTicket[]; pendingOrders: AppPendingTicketOrder[]; wallets: AppWallet[]; onRefresh: () => Promise<void>; onClose: () => void }) {
   const moduleInfo = appModules.find((item) => item.key === moduleKey);
   const ModuleIcon = moduleInfo?.icon;
   const isPosLauncher = ["pos", "bar-pos", "kitchen-pos", "gates"].includes(moduleKey);
@@ -2235,7 +2236,7 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onClose
           ×
         </button>
         {moduleKey === "tickets" ? (
-          <TicketsFlow user={user} tickets={tickets} pendingOrders={pendingOrders} />
+          <TicketsFlow user={user} tickets={tickets} pendingOrders={pendingOrders} onRefresh={onRefresh} />
         ) : moduleKey === "family" ? (
           <FamilyFlow />
         ) : moduleKey === "wallet" ? (
@@ -3299,10 +3300,12 @@ function pendingTicketStatusLabel(status: string) {
   return "Nog nie voltooi nie";
 }
 
-function TicketsFlow({ user, tickets, pendingOrders = [], standalone = false }: { user: AppUser; tickets: AppTicket[]; pendingOrders?: AppPendingTicketOrder[]; standalone?: boolean }) {
+function TicketsFlow({ user, tickets, pendingOrders = [], onRefresh, standalone = false }: { user: AppUser; tickets: AppTicket[]; pendingOrders?: AppPendingTicketOrder[]; onRefresh?: () => Promise<void>; standalone?: boolean }) {
   const [family, setFamily] = useState<FamilyMember[]>([]);
   const [assigning, setAssigning] = useState<number | null>(null);
   const [payingCode, setPayingCode] = useState("");
+  const [checkingCode, setCheckingCode] = useState("");
+  const [notice, setNotice] = useState("");
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [buying, setBuying] = useState(standalone);
   const [error, setError] = useState("");
@@ -3339,6 +3342,24 @@ function TicketsFlow({ user, tickets, pendingOrders = [], standalone = false }: 
       setPayingCode("");
     }
   };
+  const checkPayment = async (order: AppPendingTicketOrder) => {
+    setCheckingCode(order.short_code);
+    setError("");
+    setNotice("");
+    try {
+      const result = await api("/api/payments/yoco/reconcile", { method: "POST", body: JSON.stringify({ code: order.short_code }) });
+      if (result.state === "paid" || result.reconciled) {
+        setNotice("Betaling bevestig. Jou kaartjies word nou gelaai.");
+        await onRefresh?.();
+      } else {
+        setError("Yoco wys nog nie die betaling as voltooi nie. Wag ’n oomblik en probeer weer.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Betaling kon nie gekontroleer word nie");
+    } finally {
+      setCheckingCode("");
+    }
+  };
   return (
     <>
       {!standalone && <><span className="detail-icon"><Ticket /></span><p className="eyebrow">My kaartjies</p><h2>Koop of wys kaartjies</h2></>}
@@ -3349,6 +3370,7 @@ function TicketsFlow({ user, tickets, pendingOrders = [], standalone = false }: 
         {standalone && <button className={`sheet-primary-link sheet-primary-button ${!buying ? "active" : ""}`} onClick={() => setBuying(false)}>My kaartjies <Ticket /></button>}
       </div>
       {buying && <TicketPurchase user={user} />}
+      {notice && <p className="success-note"><CheckCircle2 />{notice}</p>}
       {error && <p className="form-error">{error}</p>}
       {!buying && pendingOrders.length > 0 && (
         <section className="pending-ticket-orders">
@@ -3369,6 +3391,10 @@ function TicketsFlow({ user, tickets, pendingOrders = [], standalone = false }: 
               <button type="button" className="app-secondary" disabled={payingCode === order.short_code} onClick={() => void resumePayment(order)}>
                 {payingCode === order.short_code ? <RefreshCw className="spin" /> : <ShieldCheck />}
                 {payingCode === order.short_code ? "Maak Yoco oop…" : `Voltooi betaling · R ${(order.total_cents / 100).toFixed(2)}`}
+              </button>
+              <button type="button" className="app-secondary subtle" disabled={checkingCode === order.short_code} onClick={() => void checkPayment(order)}>
+                {checkingCode === order.short_code ? <RefreshCw className="spin" /> : <RefreshCw />}
+                {checkingCode === order.short_code ? "Kontroleer…" : "Kontroleer betaling"}
               </button>
             </article>
           ))}
