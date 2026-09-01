@@ -36,3 +36,17 @@ test("app module permissions and native review labels stay aligned", async () =>
   }
   assert.match(source, /const staffReviewScopes:[\s\S]*"horse-processing"[\s\S]*"venue-approvals"[\s\S]*"rental-approvals"[\s\S]*applications/);
 });
+
+test("bar refund clients surface backend failures and reuse refund keys while busy", async () => {
+  const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
+  const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
+
+  assert.match(webSource, /!response\.ok \|\| data\?\.ok === false/);
+  assert.match(webSource, /data\.request_id \? ` Verwysing: \$\{data\.request_id\}` : ""/);
+  assert.match(webSource, /const idempotencyKey = refundKeys\[transaction\.id\] \|\| crypto\.randomUUID\(\)/);
+  assert.match(webSource, /idempotency_key: idempotencyKey/);
+
+  assert.match(nativeSource, /!response\.ok \|\| data\?\.ok === false/);
+  assert.match(nativeSource, /const idempotencyKey = refundKeys\[transaction\.id\]/);
+  assert.match(nativeSource, /idempotency_key: idempotencyKey/);
+});

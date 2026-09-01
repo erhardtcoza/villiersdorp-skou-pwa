@@ -40,7 +40,10 @@ const modules: readonly Module[] = [
 async function request(path: string, options: RequestInit = {}, token?: string | null) {
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers: { "content-type": "application/json", "x-app-client": "native", ...(token ? { authorization: `Bearer ${token}` } : {}), ...(options.headers || {}) } });
   const data = await response.json().catch(() => ({ ok: false, error: "Die bediener het nie korrek geantwoord nie" }));
-  if (!response.ok) throw new Error(data.error || "Iets het verkeerd geloop");
+  if (!response.ok || data?.ok === false) {
+    const suffix = data.request_id ? ` Verwysing: ${data.request_id}` : "";
+    throw new Error(`${data.error || data.reason || "Iets het verkeerd geloop"}${suffix}`);
+  }
   return data;
 }
 
@@ -175,7 +178,7 @@ function ModuleScreen({ screen, me, token, actualView, preview, onPreview, onBac
   const [family, setFamily] = useState<FamilyMember[]>([]), [loading, setLoading] = useState(screen === "family"), [adding, setAdding] = useState(false), [name, setName] = useState(""), [relationship, setRelationship] = useState("");
   const [selectedWalletId, setSelectedWalletId] = useState(me.wallets[0]?.id || ""), [topupAmount, setTopupAmount] = useState(10000), [topupBusy, setTopupBusy] = useState(false);
   const [barTransactions, setBarTransactions] = useState<BarTransaction[]>([]), [barLoading, setBarLoading] = useState(false), [barError, setBarError] = useState(""), [canRefund, setCanRefund] = useState(false);
-  const [activeRefundId, setActiveRefundId] = useState<number | null>(null), [refundBusyId, setRefundBusyId] = useState<number | null>(null), [refundMethod, setRefundMethod] = useState<Record<number, "wallet" | "card">>({}), [refundReason, setRefundReason] = useState<Record<number, string>>({});
+  const [activeRefundId, setActiveRefundId] = useState<number | null>(null), [refundBusyId, setRefundBusyId] = useState<number | null>(null), [refundMethod, setRefundMethod] = useState<Record<number, "wallet" | "card">>({}), [refundReason, setRefundReason] = useState<Record<number, string>>({}), [refundKeys, setRefundKeys] = useState<Record<number, string>>({});
   const loadFamily = async () => { setLoading(true); try { const result = await request("/api/app/family", {}, token); setFamily(result.family || []); } catch (err) { Alert.alert("Kon nie laai nie", err instanceof Error ? err.message : "Probeer weer"); } finally { setLoading(false); } };
   const loadBarTransactions = async () => { setBarLoading(true); setBarError(""); try { const result = await request("/api/app/bar/transactions?limit=15", {}, token); setBarTransactions(result.transactions || []); setCanRefund(Boolean(result.can_refund)); } catch (err) { setBarError(err instanceof Error ? err.message : "Kroegtransaksies kon nie gelaai word nie"); } finally { setBarLoading(false); } };
   useEffect(() => { if (screen === "family" || screen === "tickets") void loadFamily(); }, [screen]);
@@ -189,12 +192,15 @@ function ModuleScreen({ screen, me, token, actualView, preview, onPreview, onBac
       return;
     }
     const method = refundMethod[transaction.id] || (transaction.payment?.method === "event_balance" ? "wallet" : "card");
+    const idempotencyKey = refundKeys[transaction.id] || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setRefundKeys((current) => ({ ...current, [transaction.id]: idempotencyKey }));
     setRefundBusyId(transaction.id);
     try {
-      const result = await request(`/api/app/bar/transactions/${transaction.id}/refund`, { method: "POST", body: JSON.stringify({ amount_cents: transaction.refundable_cents, method, reason }) }, token);
+      const result = await request(`/api/app/bar/transactions/${transaction.id}/refund`, { method: "POST", body: JSON.stringify({ amount_cents: transaction.refundable_cents, method, reason, idempotency_key: idempotencyKey }) }, token);
       if (result.transaction) setBarTransactions((current) => current.map((row) => row.id === transaction.id ? result.transaction : row));
       setActiveRefundId(null);
       setRefundReason((current) => ({ ...current, [transaction.id]: "" }));
+      setRefundKeys((current) => { const next = { ...current }; delete next[transaction.id]; return next; });
       Alert.alert("Refund gestoor", result.refund?.status === "pending_provider" ? "Kaart-refund is aangeteken vir Yoco-opvolg." : "Refund is voltooi en die beursie is opgedateer.");
     } catch (err) {
       Alert.alert("Refund kon nie stoor nie", err instanceof Error ? err.message : "Probeer weer");

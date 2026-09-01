@@ -910,7 +910,11 @@ async function api(path: string, init?: RequestInit) {
     window.clearTimeout(timeout);
   }
   const data = await response.json().catch(() => ({ ok: false, error: "Die bediener het nie korrek geantwoord nie" }));
-  if (!response.ok) throw new Error(data.error || `Die bediener het HTTP ${response.status} teruggegee`);
+  if (!response.ok || data?.ok === false) {
+    const message = data.error || data.reason || `Die bediener het HTTP ${response.status} teruggegee`;
+    const suffix = data.request_id ? ` Verwysing: ${data.request_id}` : "";
+    throw new Error(`${message}${suffix}`);
+  }
   return data;
 }
 
@@ -1903,14 +1907,17 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
     const method = refundMethod[transaction.id] || (transaction.payment?.method === "event_balance" ? "wallet" : "card");
     const reason = String(refundReason[transaction.id] || "").trim();
     if (!Number.isFinite(amount) || amount < 1 || amount > transaction.refundable_cents) {
+      setMessage("");
       setError("Refund bedrag is ongeldig.");
       return;
     }
     if (reason.length < 3) {
+      setMessage("");
       setError("Gee asseblief eers ’n rede vir die refund.");
       return;
     }
     if (method === "wallet" && !transaction.wallet_id && transaction.payment?.method !== "event_balance") {
+      setMessage("");
       setError("Hierdie transaksie het nie ’n kliëntbeursie gekoppel nie. Kies Yoco-kaart refund/opvolg, of koppel die kliënt se beursie eers.");
       return;
     }
