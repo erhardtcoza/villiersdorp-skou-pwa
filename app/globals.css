@@ -1277,6 +1277,15 @@
 .app-pos-customer-list small {
   color: var(--muted);
 }
+.scanner-panel{display:grid;gap:12px;margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:18px;background:#fff}
+.scanner-panel label{display:grid;gap:6px;color:#40534a;font-size:12px;font-weight:900}
+.scanner-panel input,.scanner-panel select{width:100%;min-height:48px;padding:11px 13px;border:1px solid #d9d3c8;border-radius:14px;background:#fff;color:var(--ink);font:inherit;font-weight:800}
+.scan-result-card{display:grid;gap:10px;margin-top:14px;padding:16px;border-radius:18px;border:1px solid var(--line);background:#fff}
+.scan-result-card>strong{font-size:20px;color:var(--green)}
+.scan-result-card.success{background:#e9f7ee;border-color:#b9ebc6}
+.scan-result-card.warning{background:#fff7df;border-color:#f0d88a}
+.scan-ticket-meta{display:grid;gap:4px;color:#40534a}
+.scan-ticket-meta span:first-child{font-weight:950;color:var(--ink)}
 @media (min-width: 860px) {
   .app-pos-layout {
     grid-template-columns: minmax(280px, 0.85fr) 1.15fr;

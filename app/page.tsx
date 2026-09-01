@@ -129,6 +129,28 @@ type PosLaunchOption = {
   status: "live" | "coming";
   badge: string;
 };
+type GateOption = { id: number; name: string; event_id?: number | null };
+type ScanTicketItem = {
+  ticket_id?: number;
+  qr?: string;
+  state?: string;
+  attendee_first?: string | null;
+  attendee_last?: string | null;
+  type_name?: string;
+  price_cents?: number;
+  order_code?: string;
+  order_status?: string;
+};
+type ScanResult = {
+  ok: boolean;
+  paid?: boolean;
+  direction?: "in" | "out";
+  reason?: string;
+  error?: string;
+  ticket?: ScanTicketItem;
+  item?: ScanTicketItem;
+  items?: ScanTicketItem[];
+};
 type AppPosDepartment = {
   area: string;
   title: string;
@@ -2409,6 +2431,81 @@ function getAppPosTerminal(area: string) {
 }
 
 function InAppScannerPanel({ onBack }: { onBack: () => void }) {
+  const [gates, setGates] = useState<GateOption[]>([]);
+  const [gateId, setGateId] = useState<number>(0);
+  const [direction, setDirection] = useState<"in" | "out" | "check">("in");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [result, setResult] = useState<ScanResult | null>(null);
+  const deviceId = typeof window === "undefined" ? "APP-SCAN" : getPosDeviceId();
+  const loadScanner = useCallback(async () => {
+    setBusy("setup");
+    setError("");
+    try {
+      await api("/api/app/pos/bridge", { method: "POST", body: JSON.stringify({ target: "scan", pos_area: "hek" }) });
+      const gatesResult = await api("/api/scan/gates");
+      const liveGates: GateOption[] = gatesResult.gates || [];
+      setGates(liveGates);
+      setGateId((current) => current || Number(liveGates[0]?.id || 0));
+      setMessage("Scanner is aan die live hek-backend gekoppel.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scanner kon nie voorberei word nie");
+    } finally {
+      setBusy("");
+    }
+  }, []);
+  useEffect(() => {
+    void loadScanner();
+  }, [loadScanner]);
+  const scanReason = (scan: ScanResult | null) => {
+    const reason = scan?.reason || scan?.error || "";
+    const map: Record<string, string> = {
+      already_inside: "Kaartjie is reeds binne",
+      already_out: "Kaartjie is reeds uitgescan",
+      not_inside: "Kaartjie is nog nie ingescan nie",
+      not_paid: "Kaartjie is nie betaal nie",
+      void: "Kaartjie is gekanselleer",
+      not_found: "Kaartjie nie gevind nie",
+      state_changed: "Kaartjie-status het op ’n ander toestel verander",
+      unauthorized: "Scanner-sessie het verval",
+    };
+    return map[reason] || reason || "Nie aanvaar nie";
+  };
+  const primaryTicket = result?.ticket || result?.item || result?.items?.[0] || null;
+  const scanStatusClass = result?.ok ? "success" : result ? "warning" : "";
+  const processCode = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    const value = code.trim();
+    if (!value) return;
+    if (direction !== "check" && !gateId) {
+      setError("Kies eers ’n hek.");
+      return;
+    }
+    setBusy("scan");
+    setError("");
+    setMessage("");
+    try {
+      await api("/api/app/pos/bridge", { method: "POST", body: JSON.stringify({ target: "scan", pos_area: "hek" }) });
+      const endpoint = direction === "check" ? "/api/scan/check" : "/api/scan/action";
+      const payload = direction === "check"
+        ? { code: value }
+        : { code: value, direction, source: "manual", gate_id: gateId, device_id: deviceId };
+      const scan = await api(endpoint, { method: "POST", body: JSON.stringify(payload) });
+      setResult(scan);
+      if (scan.ok) {
+        setMessage(direction === "in" ? "Toegang goedgekeur." : direction === "out" ? "Uitgang aangeteken." : scan.paid ? "Kaartjie geldig en betaal." : "Kaartjie gevind, maar nie betaal nie.");
+        if (direction !== "check") setCode("");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Scan het misluk";
+      setResult({ ok: false, error: msg });
+      setError(msg);
+    } finally {
+      setBusy("");
+    }
+  };
   return (
     <>
       <button className="sheet-secondary inline-back" type="button" onClick={onBack}>
@@ -2417,10 +2514,50 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
       <span className="detail-icon"><ScanLine /></span>
       <p className="eyebrow">Hek scan</p>
       <h2>Scan in / uit</h2>
-      <p className="request-intro">Hierdie skerm bly nou binne die app. Die kamera-skandeerder self word volgende app-native gekoppel aan dieselfde ticket scan backend.</p>
+      <p className="request-intro">Hierdie skerm bly binne die app en gebruik dieselfde live ticket scan backend as die bestaande hek-skandeerder.</p>
+      {busy === "setup" && <p className="loading-line"><RefreshCw className="spin" /> Koppel scanner…</p>}
+      {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+      {error && <p className="form-error">{error}</p>}
+      <form className="scanner-panel" onSubmit={processCode}>
+        <label>Hek
+          <select value={gateId} onChange={(event) => setGateId(Number(event.target.value))}>
+            {!gates.length && <option value="0">Geen hekke gelaai nie</option>}
+            {gates.map((gate) => <option key={gate.id} value={gate.id}>{gate.name}</option>)}
+          </select>
+        </label>
+        <div className="amount-options payment-method-options">
+          <button type="button" className={direction === "in" ? "active" : ""} onClick={() => setDirection("in")}>Scan in</button>
+          <button type="button" className={direction === "out" ? "active" : ""} onClick={() => setDirection("out")}>Scan uit</button>
+          <button type="button" className={direction === "check" ? "active" : ""} onClick={() => setDirection("check")}>Kontroleer</button>
+        </div>
+        <label>QR / kaartjiekode
+          <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="Scan of plak QR/kode, bv. CVPJ7YS-8-L81Z1Y" autoCapitalize="characters" />
+        </label>
+        <button className="app-primary" disabled={busy === "scan" || !code.trim() || (direction !== "check" && !gateId)}>
+          {busy === "scan" ? <RefreshCw className="spin" /> : <ScanLine />}
+          {busy === "scan" ? "Verwerk…" : direction === "in" ? "Scan in" : direction === "out" ? "Scan uit" : "Kontroleer kaartjie"}
+        </button>
+        <button type="button" className="app-secondary subtle" onClick={() => void loadScanner()} disabled={busy === "setup"}>
+          <RefreshCw className={busy === "setup" ? "spin" : ""} /> Herlaai hekke
+        </button>
+      </form>
+      {result && (
+        <section className={`scan-result-card ${scanStatusClass}`}>
+          <strong>{result.ok ? (direction === "in" ? "✓ Toegang goedgekeur" : direction === "out" ? "✓ Uitgang aangeteken" : result.paid ? "✓ Geldig / betaal" : "Nie betaal nie") : scanReason(result)}</strong>
+          {primaryTicket && (
+            <div className="scan-ticket-meta">
+              <span>{primaryTicket.type_name || "Skoukaartjie"}</span>
+              <span>{[primaryTicket.attendee_first, primaryTicket.attendee_last].filter(Boolean).join(" ") || "Geen naam"}</span>
+              <span>{primaryTicket.order_code || primaryTicket.qr || ""}</span>
+              <span>Status: {primaryTicket.state || "—"} · Order: {primaryTicket.order_status || (result.paid ? "paid" : "unknown")}</span>
+            </div>
+          )}
+          {result.items && result.items.length > 1 && <small>{result.items.length} kaartjies op hierdie bestelling gevind. Scan elke individuele QR vir in/uit.</small>}
+        </section>
+      )}
       <div className="handoff">
-        <strong>Nie meer ’n redirect nie</strong>
-        <p>Tot die kamera-komponent volledig in die app klaar is, wys hierdie module as ’n in-app opvolgtaak in plaas daarvan om na die ou skerm te spring.</p>
+        <strong>Kamera scan</strong>
+        <p>Handmatige kode/QR verwerking werk nou binne die app. Kamera-leser is die volgende stap sodat die toestel se kamera die veld outomaties invul en dieselfde aksie uitvoer.</p>
       </div>
     </>
   );
