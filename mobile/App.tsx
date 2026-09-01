@@ -40,7 +40,7 @@ const modules: readonly Module[] = [
   { key: "bar", icon: "🍻", title: "Kroegtransaksies", detail: "Laaste verkope en gemagtigde refunds", roles: ["staff", "committee"], permissions: ["bar_transactions", "bar_refunds"] },
   { key: "pos", icon: "🧾", title: "Hek POS", detail: "Hekkaartjies, verkope en dagafsluiting", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=hek`, permissions: ["pos_sales"] },
   { key: "bar-pos", icon: "🍻", title: "Kroeg POS", detail: "Kroegverkope, Yoco en beursiebetalings", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=kroeg`, permissions: ["bar_pos"] },
-  { key: "wallet-topup", icon: "💳", title: "Beursie aanvulling", detail: "Laai of skep ’n gas se skoubeursie met kontant of kaart", roles: ["staff", "committee"], href: `${API_BASE}/bar/topup`, permissions: ["pos_sales", "bar_pos"] },
+  { key: "wallet-topup", icon: "💳", title: "Beursie aanvulling", detail: "Laai of skep ’n gas se skoubeursie met kontant of kaart", roles: ["staff", "committee"], href: "https://app.villiersdorpskou.co.za/?module=wallet-topup", permissions: ["pos_sales", "bar_pos"] },
   { key: "kitchen-pos", icon: "🍽️", title: "Kombuis POS", detail: "Kombuisverkope en toekomstige afdelings", roles: ["staff", "committee"], href: `${API_BASE}/app?pos_area=kombuis`, permissions: ["kitchen_pos"] },
   { key: "gates", icon: "📷", title: "Hek scan in / uit", detail: "Skandeer kaartjies en monitor toegang", roles: ["staff", "committee"], href: `${API_BASE}/scan`, permissions: ["gates_scan"] },
   { key: "horse-apply", icon: "🏆", title: "Doen perde-aansoek", detail: "Inskrywings, klasse en dokumente", roles: ["visitor", "vendor", "staff", "committee"], href: "https://app.villiersdorpskou.co.za/perde" },

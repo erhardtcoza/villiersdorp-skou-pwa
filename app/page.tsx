@@ -29,7 +29,9 @@ type FamilyMember = { id: number; name: string; relationship?: string | null; da
 type AppWallet = {
   id: string;
   name: string;
+  mobile?: string | null;
   balance_cents: number;
+  version?: number;
   status: string;
 };
 type TicketType = {
@@ -255,7 +257,6 @@ const posLaunchOptions: PosLaunchOption[] = [
     key: "wallet-topup",
     title: "Beursie aanvulling",
     detail: "Laai of skep ’n gas se skoubeursie met kontant of kaart by die POS.",
-    href: "https://tickets.villiersdorpskou.co.za/bar/topup",
     status: "live",
     badge: "BEURSIE",
   },
@@ -404,9 +405,8 @@ const appModules: AppModule[] = [
     icon: WalletCards,
     roles: ["staff", "committee"],
     permissions: ["pos_sales", "bar_pos"],
-    href: "https://tickets.villiersdorpskou.co.za/bar/topup",
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "bar-pos",
@@ -2142,6 +2142,8 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
           <FamilyFlow />
         ) : moduleKey === "wallet" ? (
           <WalletFlow wallets={wallets} />
+        ) : moduleKey === "wallet-topup" ? (
+          <PosWalletTopupPanel />
         ) : requestModuleDetails[moduleKey] ? (
           <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
         ) : moduleKey === "horse-processing" && staffReview ? (
@@ -2162,6 +2164,7 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
   const [config, setConfig] = useState<AppPosConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showWalletTopup, setShowWalletTopup] = useState(false);
   const preferred = moduleKey === "bar-pos" ? "bar-pos" : moduleKey === "kitchen-pos" ? "kitchen-pos" : moduleKey === "gates" ? "gate-scanner" : "gate-pos";
   useEffect(() => {
     let active = true;
@@ -2202,6 +2205,7 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
   const liveKeys = new Set(scopedLiveOptions.map((option) => option.key));
   const fallbackAdditions = scopedFallbackOptions.filter((option) => !liveKeys.has(option.key));
   const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...fallbackAdditions] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
+  if (showWalletTopup) return <PosWalletTopupPanel onBack={() => setShowWalletTopup(false)} />;
   return (
     <>
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
@@ -2216,7 +2220,15 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
       {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}
       <div className="pos-launch-grid">
         {ordered.map((option) => (
-          option.href ? (
+          option.key === "wallet-topup" ? (
+            <button className="pos-launch-card" type="button" key={option.key} onClick={() => setShowWalletTopup(true)}>
+              <span>{option.badge}</span>
+              <strong>{option.title}</strong>
+              <small>{option.detail}</small>
+              <em data-status={option.status}>Live</em>
+              <ArrowRight />
+            </button>
+          ) : option.href ? (
             <a className="pos-launch-card" href={option.href} key={option.key}>
               <span>{option.badge}</span>
               <strong>{option.title}</strong>
@@ -2840,6 +2852,146 @@ function WalletFlow({ wallets }: { wallets: AppWallet[] }) {
         </>
       ) : <EmptyState icon={<WalletCards />} title="Geen beursie gekoppel nie" text="’n Beursie met dieselfde bevestigde selfoonnommer sal outomaties hier verskyn." />}
       <div className="secure-topup-note"><ShieldCheck /><p><strong>Veilige aanlyn aanvulling</strong><br />Jou balans verander eers nadat Yoco die betaling aan die Skou-bediener bevestig het.</p></div>
+    </>
+  );
+}
+
+function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
+  const [query, setQuery] = useState("");
+  const [wallet, setWallet] = useState<AppWallet | null>(null);
+  const [newName, setNewName] = useState("");
+  const [newMobile, setNewMobile] = useState("");
+  const [amount, setAmount] = useState(10000);
+  const [method, setMethod] = useState<"cash" | "card">("cash");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const lookup = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (!query.trim()) return;
+    setBusy("lookup");
+    setError("");
+    setMessage("");
+    try {
+      const result = await api(`/api/app/staff/wallets/lookup?q=${encodeURIComponent(query.trim())}`);
+      setWallet(result.wallet);
+      setMessage("Beursie gelaai.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Beursie kon nie gelaai word nie");
+    } finally {
+      setBusy("");
+    }
+  };
+  const create = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy("create");
+    setError("");
+    setMessage("");
+    try {
+      const result = await api("/api/app/staff/wallets/create", {
+        method: "POST",
+        body: JSON.stringify({ name: newName, mobile: newMobile }),
+      });
+      setWallet(result.wallet);
+      setQuery(result.wallet?.id || "");
+      setNewName("");
+      setNewMobile("");
+      setMessage("Nuwe beursie geskep.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Beursie kon nie geskep word nie");
+    } finally {
+      setBusy("");
+    }
+  };
+  const topup = async () => {
+    if (!wallet?.id) return;
+    setBusy("topup");
+    setError("");
+    setMessage("");
+    try {
+      const result = await api("/api/app/staff/wallets/topup", {
+        method: "POST",
+        body: JSON.stringify({ wallet_id: wallet.id, amount_cents: amount, method, note }),
+      });
+      setWallet(result.wallet);
+      setNote("");
+      setMessage(`${method === "cash" ? "Kontant" : "Kaart"} topup van R ${(amount / 100).toFixed(2)} is gestoor.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Topup kon nie gestoor word nie");
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <>
+      {onBack && (
+        <button className="sheet-secondary inline-back" type="button" onClick={onBack}>
+          <ArrowLeft /> Terug na POS-afdelings
+        </button>
+      )}
+      <span className="detail-icon"><WalletCards /></span>
+      <p className="eyebrow">POS beursie</p>
+      <h2>Beursie aanvulling</h2>
+      <p className="request-intro">Soek ’n gas se beursie per ID of selfoon, skep ’n nuwe beursie indien nodig, en teken kontant of kaart-topups binne die app aan.</p>
+
+      <form className="topup-panel" onSubmit={lookup}>
+        <strong>Laai bestaande beursie</strong>
+        <label>Beursie ID of selfoonnommer
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="bv. V95AQHY of 082… / 2772…" />
+        </label>
+        <button className="app-primary" disabled={busy === "lookup" || !query.trim()}>
+          {busy === "lookup" ? <RefreshCw className="spin" /> : <WalletCards />}
+          {busy === "lookup" ? "Laai…" : "Laai beursie"}
+        </button>
+      </form>
+
+      <form className="topup-panel" onSubmit={create}>
+        <strong>Skep nuwe beursie</strong>
+        <label>Naam
+          <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Gas se naam" />
+        </label>
+        <label>Selfoon
+          <input value={newMobile} onChange={(event) => setNewMobile(event.target.value)} placeholder="082… of 2772…" inputMode="tel" />
+        </label>
+        <button className="app-secondary" disabled={busy === "create" || !newName.trim()}>
+          {busy === "create" ? <RefreshCw className="spin" /> : <UserPlus />}
+          {busy === "create" ? "Skep…" : "Skep beursie"}
+        </button>
+      </form>
+
+      {wallet && (
+        <section className="topup-panel">
+          <div className="purchase-heading">
+            <div>
+              <strong>{wallet.name || "Skoubeursie"}</strong>
+              <small>{wallet.mobile || wallet.id}</small>
+            </div>
+            <span>R {(wallet.balance_cents / 100).toFixed(2)}</span>
+          </div>
+          <div className="amount-options">
+            {[5000, 10000, 20000, 30000].map((value) => <button type="button" key={value} className={amount === value ? "active" : ""} onClick={() => setAmount(value)}>R {value / 100}</button>)}
+          </div>
+          <label>Ander bedrag
+            <input type="number" min="10" max="5000" step="10" value={amount / 100} onChange={(event) => setAmount(Math.round(Number(event.target.value || 0) * 100))} />
+          </label>
+          <div className="amount-options payment-method-options">
+            <button type="button" className={method === "cash" ? "active" : ""} onClick={() => setMethod("cash")}>Kontant</button>
+            <button type="button" className={method === "card" ? "active" : ""} onClick={() => setMethod("card")}>Kaart</button>
+          </div>
+          <label>Nota / verwysing
+            <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={method === "card" ? "Yoco strokie/verwysing indien beskikbaar" : "Opsioneel"} />
+          </label>
+          <button className="app-primary" type="button" disabled={busy === "topup" || amount < 1000 || amount > 500000} onClick={() => void topup()}>
+            {busy === "topup" ? <RefreshCw className="spin" /> : <ShieldCheck />}
+            {busy === "topup" ? "Stoor…" : `Stoor ${method === "cash" ? "kontant" : "kaart"} topup`}
+          </button>
+          <small className="payment-note">Gebruik “Kaart” nadat die Yoco-kaartbetaling by die kassier bevestig is. Die balans word onmiddellik op die backend geaudit.</small>
+        </section>
+      )}
+
+      {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+      {error && <p className="form-error">{error}</p>}
     </>
   );
 }

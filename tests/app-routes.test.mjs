@@ -49,7 +49,12 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /key:\s*"pos"[\s\S]*?permissions:\s*\["pos_sales"\]/);
   assert.match(source, /key:\s*"bar-pos"[\s\S]*?permissions:\s*\["bar_pos"\]/);
   assert.match(source, /key:\s*"wallet-topup"[\s\S]*?permissions:\s*\["pos_sales",\s*"bar_pos"\]/);
-  assert.match(source, /key:\s*"wallet-topup"[\s\S]*?href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/bar\/topup"/);
+  assert.match(source, /key:\s*"wallet-topup"[\s\S]*?status:\s*"live"/);
+  assert.match(source, /moduleKey === "wallet-topup"[\s\S]*<PosWalletTopupPanel/);
+  assert.match(source, /api\(`\/api\/app\/staff\/wallets\/lookup\?q=\$\{encodeURIComponent\(query\.trim\(\)\)\}`\)/);
+  assert.match(source, /api\("\/api\/app\/staff\/wallets\/create"/);
+  assert.match(source, /api\("\/api\/app\/staff\/wallets\/topup"/);
+  assert.doesNotMatch(source, /key:\s*"wallet-topup"[\s\S]{0,260}href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/bar\/topup"/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?permissions:\s*\["kitchen_pos"\]/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
   const fallbackPosOptions = source.slice(source.indexOf("const posLaunchOptions:"), source.indexOf("const appModules:"));
@@ -77,7 +82,8 @@ test("native app keeps the same grouped app and POS navigation language", async 
     assert.match(nativeSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(nativeSource, /Beursie aanvulling/);
-  assert.match(nativeSource, /\/bar\/topup/);
+  assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=wallet-topup/);
+  assert.doesNotMatch(nativeSource, /\/bar\/topup/);
   for (const area of ["pos_area=hek", "pos_area=kroeg", "pos_area=kombuis"]) {
     assert.match(nativeSource, new RegExp(area));
   }

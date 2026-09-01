@@ -12,6 +12,9 @@
 .module-card {
   color: inherit;
   text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
 }
 .module-group-list {
   display: grid;
@@ -420,6 +423,9 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 7px;
 }
+.payment-method-options {
+  grid-template-columns: repeat(2, 1fr);
+}
 .amount-options button {
   min-height: 42px;
   border: 1px solid #d9d3c8;
@@ -427,6 +433,9 @@
   background: #fff;
   color: var(--ink);
   font-weight: 850;
+}
+.inline-back {
+  margin: 0 0 14px !important;
 }
 
 /* Full app pages for ticket sales and venue bookings */
