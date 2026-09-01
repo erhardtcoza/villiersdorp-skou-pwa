@@ -1830,6 +1830,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
   const [refundAmount, setRefundAmount] = useState<Record<number, string>>({});
   const [refundMethod, setRefundMethod] = useState<Record<number, string>>({});
   const [refundReason, setRefundReason] = useState<Record<number, string>>({});
+  const [refundKeys, setRefundKeys] = useState<Record<number, string>>({});
 
   const loadTransactions = async () => {
     setLoading(true);
@@ -1862,6 +1863,12 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
       setError("Gee asseblief eers ’n rede vir die refund.");
       return;
     }
+    if (method === "wallet" && !transaction.wallet_id && transaction.payment?.method !== "event_balance") {
+      setError("Hierdie transaksie het nie ’n kliëntbeursie gekoppel nie. Kies Yoco-kaart refund/opvolg, of koppel die kliënt se beursie eers.");
+      return;
+    }
+    const idempotencyKey = refundKeys[transaction.id] || crypto.randomUUID();
+    setRefundKeys((current) => ({ ...current, [transaction.id]: idempotencyKey }));
     setBusyRefundId(transaction.id);
     setError("");
     setMessage("");
@@ -1872,12 +1879,18 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
           amount_cents: amount,
           method,
           reason,
+          idempotency_key: idempotencyKey,
         }),
       });
       if (result.transaction) {
         setTransactions((current) => current.map((row) => row.id === transaction.id ? result.transaction : row));
       }
       setActiveRefundId(null);
+      setRefundKeys((current) => {
+        const next = { ...current };
+        delete next[transaction.id];
+        return next;
+      });
       setMessage(result.refund?.status === "pending_provider" ? "Kaart-refund is aangeteken vir Yoco-opvolg." : "Refund is voltooi en die beursie is opgedateer.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refund kon nie gestoor word nie");
@@ -1962,6 +1975,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
                           </label>
                         </div>
                         {activeMethod === "card" && <p className="provider-note">Kaart-refunds word as Yoco-opvolg aangeteken totdat die live Yoco refund-koppeling klaar getoets is.</p>}
+                        {busyRefundId === transaction.id && <p className="provider-note">Besig om veilig te stoor. As die netwerk stadig is en jy probeer weer, gebruik die app dieselfde refund-sleutel om ’n dubbel refund te voorkom.</p>}
                         <label>Rede vir refund
                           <textarea value={refundReason[transaction.id] || ""} onChange={(event) => setRefundReason((current) => ({ ...current, [transaction.id]: event.target.value }))} placeholder="Byvoorbeeld: verkeerde item, duplikaat, kassier-fout" />
                         </label>
