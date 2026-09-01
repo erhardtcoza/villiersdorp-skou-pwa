@@ -1948,7 +1948,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
         delete next[transaction.id];
         return next;
       });
-      setMessage(result.refund?.status === "pending_provider" ? "Kaart-refund is aangeteken vir Yoco-opvolg." : "Refund is voltooi en die beursie is opgedateer.");
+      setMessage(result.refund?.status === "pending_provider" ? "Refund is veilig aangeteken. Yoco het nog nie finaal bevestig nie; verfris transaksies oor ’n oomblik." : "Refund is voltooi en die transaksie is opgedateer.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refund kon nie gestoor word nie");
     } finally {
@@ -2031,7 +2031,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
                             </select>
                           </label>
                         </div>
-                        {activeMethod === "card" && <p className="provider-note">Kaart-refunds word as Yoco-opvolg aangeteken totdat die live Yoco refund-koppeling klaar getoets is.</p>}
+                        {activeMethod === "card" && <p className="provider-note">Die app probeer die Yoco-kaart refund dadelik. As Yoco stadig antwoord, word die refund veilig as opvolg aangeteken met dieselfde refund-sleutel.</p>}
                         {busyRefundId === transaction.id && <p className="provider-note">Besig om veilig te stoor. As die netwerk stadig is en jy probeer weer, gebruik die app dieselfde refund-sleutel om ’n dubbel refund te voorkom.</p>}
                         <label>Rede vir refund
                           <textarea value={refundReason[transaction.id] || ""} onChange={(event) => setRefundReason((current) => ({ ...current, [transaction.id]: event.target.value }))} placeholder="Byvoorbeeld: verkeerde item, duplikaat, kassier-fout" />

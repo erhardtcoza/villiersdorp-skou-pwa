@@ -60,10 +60,15 @@ test("bar refund clients surface backend failures and reuse refund keys while bu
   assert.match(webSource, /data\.request_id \? ` Verwysing: \$\{data\.request_id\}` : ""/);
   assert.match(webSource, /const idempotencyKey = refundKeys\[transaction\.id\] \|\| crypto\.randomUUID\(\)/);
   assert.match(webSource, /idempotency_key: idempotencyKey/);
+  assert.match(webSource, /Yoco het nog nie finaal bevestig nie/);
+  assert.match(webSource, /Die app probeer die Yoco-kaart refund dadelik/);
 
   assert.match(nativeSource, /!response\.ok \|\| data\?\.ok === false/);
+  assert.match(nativeSource, /Die versoek het te lank geneem\. Herlaai die app en probeer weer/);
   assert.match(nativeSource, /const idempotencyKey = refundKeys\[transaction\.id\]/);
   assert.match(nativeSource, /idempotency_key: idempotencyKey/);
+  assert.match(nativeSource, /Yoco het nog nie finaal bevestig nie/);
+  assert.match(nativeSource, /Die app probeer die Yoco-kaart refund dadelik/);
 });
 
 test("app health route checks the app backend and ticket catalogue", async () => {
