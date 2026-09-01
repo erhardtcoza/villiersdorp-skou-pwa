@@ -393,6 +393,7 @@ const appModules: AppModule[] = [
     detail: "Inskrywings, klasse en dokumente",
     icon: Trophy,
     roles: allViews,
+    href: "https://www.villiersdorpskou.co.za/horses/apply",
     live: true,
     status: "live",
   },
@@ -553,7 +554,7 @@ const appModuleGroups: AppModuleGroup[] = [
     title: "Perde",
     detail: "Aansoeke, klasse, program en personeelverwerking.",
     icon: Trophy,
-    roles: ["visitor", "staff", "committee"],
+    roles: allViews,
     modules: ["horses", "horse-processing", "horse-programme"],
   },
   {
@@ -662,8 +663,8 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     action: "Maak vendor admin oop",
   },
   horses: {
-    status: "Gebruik hierdie vir ’n nuwe perde-aansoek of inskrywingsnavraag. Dit gaan na dieselfde backend app-versoek queue vir opvolg.",
-    ready: ["Visitors kan ’n perde-versoek uit die app stuur", "Perde afdeling en permissions bestaan", "Public perdeblad en admin verwerking bestaan"],
+    status: "Gebruik hierdie vir ’n nuwe perde-aansoek. Die bestaande publieke perde-aansoek bly die bron van waarheid; die app kan steeds ’n opvolgversoek stoor indien iemand hulp nodig het.",
+    ready: ["Open die bestaande online perde-aansoek", "Visitors kan ’n perde-versoek uit die app stuur", "Public perdeblad en admin verwerking bestaan"],
     next: ["Koppel direk aan horse application tables", "Koppel vorige vertoners, klasse, fakture en bandjies"],
   },
   "horse-processing": {
@@ -691,7 +692,7 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     next: ["Bou app-native gebou take/checklists", "Koppel aan verhurings en terreinversoeke", "Voeg verantwoordelike persone per gebou by"],
   },
   rentals: {
-    status: "Verhuring-aansoeke en opvolg kan nou uit die app gestuur word en deur admin opgevolg word.",
+    status: "Verhuring-aansoeke en opvolg kan nou uit die app gestuur word en deur admin opgevolg word. Dit bly in dieselfde app/backend request queue totdat pryse, voorwaardes en fakture finaal vas is.",
     ready: ["Dien verhuring-aansoek uit die app in", "Kan terreinbesprekings as bron gebruik", "Admin sien die versoek in die app queue"],
     next: ["Koppel quote/faktuur na goedkeuring", "Maak huurkontrak/voorwaardes templates", "Wys kalender van verhuring versoeke"],
   },
@@ -1662,7 +1663,7 @@ function WorkflowGroupPage({ group, onOpen, fallback }: { group?: AppModuleGroup
 function AppModuleCard({ item, onOpen, compact = false }: { item: AppModule; onOpen: () => void; compact?: boolean }) {
   const Icon = item.icon;
   const status = item.status || (item.live ? "live" : "coming");
-  const label = status === "live" ? "Live" : status === "admin" ? "Kontak admin / eksterne skerm" : "Kom binnekort";
+  const label = status === "live" ? "Live" : status === "admin" ? "Web/admin skerm" : "Kom binnekort";
   const content = (
     <>
       <span className="module-icon">
