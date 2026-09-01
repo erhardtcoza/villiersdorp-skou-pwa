@@ -69,6 +69,9 @@ test("native app keeps the same grouped app and POS navigation language", async 
   assert.match(nativeSource, /canUseModule\(me\.user, item\)/);
   assert.match(nativeSource, /\[preview,\s*me\.user\]/);
   assert.match(nativeSource, /grouped\.length\}\s*groepe/);
+  assert.match(nativeSource, /group\.items\.map\(\(item\)/);
+  assert.doesNotMatch(nativeSource, /group\.items\.slice\(0,\s*4\)/);
+  assert.doesNotMatch(nativeSource, /verdere opsies op die PWA/);
 });
 
 test("bar refund clients surface backend failures and reuse refund keys while busy", async () => {
