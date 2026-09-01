@@ -1893,7 +1893,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [canRefund, setCanRefund] = useState(Boolean(user.permissions?.includes("bar_refunds")));
+  const [canRefund, setCanRefund] = useState(hasAnyPermission(user, ["bar_refunds"]));
   const [activeRefundId, setActiveRefundId] = useState<number | null>(null);
   const [busyRefundId, setBusyRefundId] = useState<number | null>(null);
   const [refundAmount, setRefundAmount] = useState<Record<number, string>>({});
