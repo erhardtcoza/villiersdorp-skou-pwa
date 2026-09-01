@@ -2,7 +2,7 @@
 
 import { Activity, ArrowLeft, ArrowRight, Bell, CalendarDays, CheckCircle2, ChevronRight, CircleUserRound, ClipboardCheck, Eye, EyeOff, Home, Images, KeyRound, Landmark, LogIn, LogOut, MapPinned, MessageCircle, QrCode, RefreshCw, ScanLine, ShieldCheck, Store, Ticket, Trophy, UserPlus, Users, WalletCards, type LucideIcon } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 type AppUser = {
   id: number;
@@ -24,6 +24,16 @@ type AppTicket = {
   attendee_first?: string | null;
   attendee_last?: string | null;
   family_member_id?: number | null;
+};
+type AppPendingTicketOrder = {
+  id: number;
+  short_code: string;
+  status: string;
+  total_cents: number;
+  created_at: number;
+  checkout_id?: string | null;
+  event_name: string;
+  items_label?: string;
 };
 type FamilyMember = { id: number; name: string; relationship?: string | null; date_of_birth?: string | null; email?: string | null; phone?: string | null };
 type AppWallet = {
@@ -48,6 +58,7 @@ type MeResponse = {
   ok: boolean;
   user: AppUser;
   tickets: AppTicket[];
+  pending_ticket_orders?: AppPendingTicketOrder[];
   wallets: AppWallet[];
   linkage: string;
 };
@@ -1581,6 +1592,7 @@ export default function HomePage() {
 
 function Dashboard({ data, message, health, onLogout }: { data: MeResponse; message: string; health: AppHealth | null; onLogout: () => void }) {
   const { user, tickets, wallets } = data;
+  const pendingTicketOrders = data.pending_ticket_orders || [];
   const actualView: RoleView = user.role === "visitor" ? "visitor" : ["vendor", "exhibitor", "uitstaller"].includes(user.role) ? "vendor" : ["admin", "committee", "manager"].includes(user.role) ? "committee" : "staff";
   const [tab, setTab] = useState<AppTab>("home"),
     [preview, setPreview] = useState<RoleView>(actualView),
@@ -1658,7 +1670,7 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
       <section className="viewport">
         {page === "tickets" ? (
           <AppSubPage eyebrow="My kaartjies" title="Koop of wys kaartjies" icon={Ticket} onBack={() => navigatePage("home")}>
-            <TicketsFlow user={user} tickets={tickets} standalone />
+            <TicketsFlow user={user} tickets={tickets} pendingOrders={pendingTicketOrders} standalone />
           </AppSubPage>
         ) : page === "venues" ? (
           <AppSubPage eyebrow="Terreinbesprekings" title="Bespreek die Skouterrein" icon={Landmark} onBack={() => navigatePage("home")}>
@@ -1787,7 +1799,7 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
         <NavButton label="Kalender" icon={CalendarDays} active={page === "home" && tab === "calendar"} onClick={() => chooseTab("calendar")} />
         <NavButton label="Profiel" icon={CircleUserRound} active={page === "home" && tab === "profile"} onClick={() => chooseTab("profile")} />
       </nav>
-      {selected && canOpenModule(selected) && <ModuleSheet moduleKey={selected} user={user} tickets={tickets} wallets={wallets} onClose={() => { setSelected(null); window.history.replaceState({}, "", pagePath(page)); }} />}
+      {selected && canOpenModule(selected) && <ModuleSheet moduleKey={selected} user={user} tickets={tickets} pendingOrders={pendingTicketOrders} wallets={wallets} onClose={() => { setSelected(null); window.history.replaceState({}, "", pagePath(page)); }} />}
     </main>
   );
 }
@@ -2210,7 +2222,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
   );
 }
 
-function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey: string; user: AppUser; tickets: AppTicket[]; wallets: AppWallet[]; onClose: () => void }) {
+function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onClose }: { moduleKey: string; user: AppUser; tickets: AppTicket[]; pendingOrders: AppPendingTicketOrder[]; wallets: AppWallet[]; onClose: () => void }) {
   const moduleInfo = appModules.find((item) => item.key === moduleKey);
   const ModuleIcon = moduleInfo?.icon;
   const isPosLauncher = ["pos", "bar-pos", "kitchen-pos", "gates"].includes(moduleKey);
@@ -2223,7 +2235,7 @@ function ModuleSheet({ moduleKey, user, tickets, wallets, onClose }: { moduleKey
           ×
         </button>
         {moduleKey === "tickets" ? (
-          <TicketsFlow user={user} tickets={tickets} />
+          <TicketsFlow user={user} tickets={tickets} pendingOrders={pendingOrders} />
         ) : moduleKey === "family" ? (
           <FamilyFlow />
         ) : moduleKey === "wallet" ? (
@@ -2414,6 +2426,8 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
 }
 
 function InAppPosPanel({ department, config, onBack }: { department: AppPosDepartment; config: AppPosConfig | null; onBack: () => void }) {
+  const [liveConfig, setLiveConfig] = useState<AppPosConfig | null>(config);
+  const [configLoading, setConfigLoading] = useState(!config?.locations?.length);
   const [locationId, setLocationId] = useState<number>(department.primary_location_id || 0);
   const [products, setProducts] = useState<PosV1Product[]>([]);
   const [basket, setBasket] = useState<Record<number, number>>({});
@@ -2427,13 +2441,39 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
   const [message, setMessage] = useState("");
   const [lease, setLease] = useState<{ terminal_code: string; device_instance_id: string; lease_token: string; expires_at?: number } | null>(null);
   const [orderCode, setOrderCode] = useState("");
-  const locations = (config?.locations || []).filter((location) => {
-    if (department.primary_location_id && Number(location.id) === Number(department.primary_location_id)) return true;
-    const group = (config?.groups || []).find((item) => Number(item.id) === Number(location.group_id));
+  useEffect(() => {
+    if (config?.locations?.length) {
+      setLiveConfig(config);
+      setConfigLoading(false);
+    }
+  }, [config]);
+  useEffect(() => {
+    let active = true;
+    if (liveConfig?.locations?.length) return () => { active = false; };
+    setConfigLoading(true);
+    setError("");
+    void api("/api/app/pos/config")
+      .then((result) => {
+        if (active) setLiveConfig(result);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "POS-afdelings kon nie gelaai word nie");
+      })
+      .finally(() => {
+        if (active) setConfigLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [department.area, liveConfig?.locations?.length]);
+  const effectiveDepartment = (liveConfig?.departments || []).find((item) => item.area === department.area) || department;
+  const locations = (liveConfig?.locations || []).filter((location) => {
+    if (effectiveDepartment.primary_location_id && Number(location.id) === Number(effectiveDepartment.primary_location_id)) return true;
+    const group = (liveConfig?.groups || []).find((item) => Number(item.id) === Number(location.group_id));
     const label = `${group?.name || ""} ${location.name || ""}`.toLowerCase();
-    if (department.area === "kroeg") return label.includes("kroeg") || label.includes("bar");
-    if (department.area === "kombuis") return label.includes("kombuis") || label.includes("kitchen") || label.includes("kos");
-    if (department.area === "hek") return label.includes("hek") || label.includes("gate") || label.includes("ticket");
+    if (effectiveDepartment.area === "kroeg") return label.includes("kroeg") || label.includes("bar");
+    if (effectiveDepartment.area === "kombuis") return label.includes("kombuis") || label.includes("kitchen") || label.includes("kos");
+    if (effectiveDepartment.area === "hek") return label.includes("hek") || label.includes("gate") || label.includes("ticket");
     return true;
   });
   const currentLocation = locations.find((item) => Number(item.id) === Number(locationId)) || locations[0] || null;
@@ -2466,23 +2506,23 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
     }
   }, []);
   const prepareTerminal = useCallback(async (id: number) => {
-    if (!id || department.status !== "live") return;
+    if (!id || effectiveDepartment.status !== "live") return;
     setBusy("terminal");
     setError("");
     try {
       await api("/api/app/pos/bridge", {
         method: "POST",
-        body: JSON.stringify({ target: "pos", pos_area: department.area, location_id: id }),
+        body: JSON.stringify({ target: "pos", pos_area: effectiveDepartment.area, location_id: id }),
       });
-      const terminal_code = getAppPosTerminal(department.area);
+      const terminal_code = getAppPosTerminal(effectiveDepartment.area);
       const device_instance_id = getPosDeviceId();
       await api("/api/pos-v1/terminal/register", {
         method: "POST",
         body: JSON.stringify({
           terminal_code,
-          device_name: `Skou App ${department.title}`,
+          device_name: `Skou App ${effectiveDepartment.title}`,
           location_id: id,
-          mode: department.area,
+          mode: effectiveDepartment.area,
           platform: "pwa",
           user_agent: window.navigator.userAgent,
           capabilities: { app_native_pos: true },
@@ -2499,13 +2539,14 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
     } finally {
       setBusy("");
     }
-  }, [department.area, department.status, department.title, loadProducts]);
+  }, [effectiveDepartment.area, effectiveDepartment.status, effectiveDepartment.title, loadProducts]);
   useEffect(() => {
-    const id = department.primary_location_id || locations[0]?.id || 0;
+    if (configLoading) return;
+    const id = effectiveDepartment.primary_location_id || locations[0]?.id || 0;
     setLocationId(Number(id || 0));
     if (id) void prepareTerminal(Number(id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [department.area, department.primary_location_id]);
+  }, [effectiveDepartment.area, effectiveDepartment.primary_location_id, configLoading, locations.length]);
   const searchCustomers = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (customerQuery.trim().length < 2) return;
@@ -2536,7 +2577,7 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
     try {
       const common = {
         ...lease,
-        event_id: config?.event?.id,
+        event_id: liveConfig?.event?.id,
         group_id: currentLocation.group_id,
         location_id: currentLocation.id,
         terminal_code: lease.terminal_code,
@@ -2594,9 +2635,10 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
       </button>
       <span className="detail-icon"><Store /></span>
       <p className="eyebrow">POS binne app</p>
-      <h2>{department.title}</h2>
-      <p className="request-intro">{department.area === "hek" ? "Hekkaartjies en toegangprodukte." : department.area === "kroeg" ? "Kroegitems, beursiebetalings, kontant en Yoco-kaart." : "Kombuisitems sodra die afdeling opgestel is."}</p>
-      {department.status !== "live" && <p className="provider-note">Hierdie POS-afdeling is nog nie live opgestel nie. Kontak admin om locations/products te koppel.</p>}
+      <h2>{effectiveDepartment.title}</h2>
+      <p className="request-intro">{effectiveDepartment.area === "hek" ? "Hekkaartjies en toegangprodukte." : effectiveDepartment.area === "kroeg" ? "Kroegitems, beursiebetalings, kontant en Yoco-kaart." : "Kombuisitems sodra die afdeling opgestel is."}</p>
+      {effectiveDepartment.status !== "live" && <p className="provider-note">Hierdie POS-afdeling is nog nie live opgestel nie. Kontak admin om locations/products te koppel.</p>}
+      {configLoading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-liggings…</p>}
       {locations.length > 1 && (
         <label className="pos-location-select">Ligging
           <select value={locationId} onChange={(event) => { const id = Number(event.target.value); setLocationId(id); void prepareTerminal(id); }}>
@@ -2604,11 +2646,11 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
           </select>
         </label>
       )}
-      {busy === "terminal" || busy === "products" ? <p className="loading-line"><RefreshCw className="spin" /> Laai {department.title}…</p> : null}
+      {busy === "terminal" || busy === "products" ? <p className="loading-line"><RefreshCw className="spin" /> Laai {effectiveDepartment.title}…</p> : null}
       {lease && <p className="provider-note">Terminal: {lease.terminal_code} · alles bly binne die app.</p>}
       {error && <p className="form-error">{error}</p>}
       {message && <p className="success-note"><CheckCircle2 />{message}</p>}
-      {!currentLocation && <EmptyState icon={<Store />} title="Geen POS-ligging gevind nie" text="Koppel eers ’n location en produkte vir hierdie afdeling in admin." />}
+      {!configLoading && !currentLocation && <EmptyState icon={<Store />} title="Geen POS-ligging gevind nie" text="Koppel eers ’n location en produkte vir hierdie afdeling in admin." />}
       {currentLocation && (
         <div className="app-pos-layout">
           <section className="app-pos-sale topup-panel">
@@ -2678,7 +2720,7 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
                 </div>
               </div>
             ))}
-            {!products.length && department.status === "live" && busy !== "products" && <EmptyState icon={<Store />} title="Geen produkte gelaai nie" text="Hierdie location het nog nie aktiewe produkte gekoppel nie, of jou sessie het verval." />}
+            {!products.length && effectiveDepartment.status === "live" && busy !== "products" && <EmptyState icon={<Store />} title="Geen produkte gelaai nie" text="Hierdie location het nog nie aktiewe produkte gekoppel nie, of jou sessie het verval." />}
           </section>
         </div>
       )}
@@ -3242,16 +3284,38 @@ function serviceStatusLabel(status: string) {
   return "Ontvang";
 }
 
-function TicketsFlow({ user, tickets, standalone = false }: { user: AppUser; tickets: AppTicket[]; standalone?: boolean }) {
+function ticketStateLabel(state: string) {
+  const normalized = String(state || "").toLowerCase();
+  if (normalized === "unused") return "Gereed";
+  if (normalized === "used") return "Gebruik";
+  if (normalized === "void" || normalized === "cancelled") return "Gekanselleer";
+  return state || "Gereed";
+}
+
+function pendingTicketStatusLabel(status: string) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "awaiting_payment") return "Betaling wag";
+  if (normalized === "pending") return "Betaling/hek wag";
+  return "Nog nie voltooi nie";
+}
+
+function TicketsFlow({ user, tickets, pendingOrders = [], standalone = false }: { user: AppUser; tickets: AppTicket[]; pendingOrders?: AppPendingTicketOrder[]; standalone?: boolean }) {
   const [family, setFamily] = useState<FamilyMember[]>([]);
   const [assigning, setAssigning] = useState<number | null>(null);
+  const [payingCode, setPayingCode] = useState("");
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [buying, setBuying] = useState(standalone);
   const [error, setError] = useState("");
+  const ticketRefs = useRef<Array<HTMLDivElement | null>>([]);
   useEffect(() => {
     void api("/api/app/family")
       .then((result) => setFamily(result.family || []))
       .catch(() => setFamily([]));
   }, []);
+  useEffect(() => {
+    if (viewerIndex === null) return;
+    window.setTimeout(() => ticketRefs.current[viewerIndex]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" }), 30);
+  }, [viewerIndex]);
   const assign = async (ticketId: number, familyMemberId: string) => {
     setAssigning(ticketId);
     setError("");
@@ -3261,6 +3325,18 @@ function TicketsFlow({ user, tickets, standalone = false }: { user: AppUser; tic
       setError(err instanceof Error ? err.message : "Kaartjie-toewysing het misluk");
     } finally {
       setAssigning(null);
+    }
+  };
+  const resumePayment = async (order: AppPendingTicketOrder) => {
+    setPayingCode(order.short_code);
+    setError("");
+    try {
+      const payment = await api("/api/payments/yoco/intent", { method: "POST", body: JSON.stringify({ code: order.short_code, app_return: true }) });
+      if (!payment.redirect_url) throw new Error("Yoco-betaling kon nie begin nie");
+      window.location.assign(payment.redirect_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Betaling kon nie hervat word nie");
+      setPayingCode("");
     }
   };
   return (
@@ -3274,15 +3350,39 @@ function TicketsFlow({ user, tickets, standalone = false }: { user: AppUser; tic
       </div>
       {buying && <TicketPurchase user={user} />}
       {error && <p className="form-error">{error}</p>}
+      {!buying && pendingOrders.length > 0 && (
+        <section className="pending-ticket-orders">
+          <div className="purchase-heading">
+            <div>
+              <strong>Betaling nog nie voltooi nie</strong>
+              <small>Voltooi betaling voordat hierdie kaartjies gewys of geskandeer kan word.</small>
+            </div>
+            <span>{pendingOrders.length}</span>
+          </div>
+          {pendingOrders.map((order) => (
+            <article className="pending-ticket-card" key={order.id || order.short_code}>
+              <div>
+                <strong>{order.items_label || "Skoukaartjies"}</strong>
+                <small>{order.event_name} · {order.short_code}</small>
+                <b>{pendingTicketStatusLabel(order.status)}</b>
+              </div>
+              <button type="button" className="app-secondary" disabled={payingCode === order.short_code} onClick={() => void resumePayment(order)}>
+                {payingCode === order.short_code ? <RefreshCw className="spin" /> : <ShieldCheck />}
+                {payingCode === order.short_code ? "Maak Yoco oop…" : `Voltooi betaling · R ${(order.total_cents / 100).toFixed(2)}`}
+              </button>
+            </article>
+          ))}
+        </section>
+      )}
       {!buying && (tickets.length ? (
         <div className="app-ticket-list sheet-list">
-          {tickets.map((ticket) => (
+          {tickets.map((ticket, index) => (
             <article key={ticket.id} className="app-ticket-card">
-              <a href={ticket.qr_url} className="app-ticket-main">
+              <button type="button" className="app-ticket-main" onClick={() => setViewerIndex(index)}>
                 <Ticket />
                 <span><strong>{ticket.ticket_name}</strong><small>{ticket.event_name}{ticket.short_code ? ` · ${ticket.short_code}` : ""}</small></span>
-                <b>{ticket.state === "unused" ? "Gereed" : ticket.state}</b>
-              </a>
+                <b>{ticketStateLabel(ticket.state)}</b>
+              </button>
               <label>
                 Kaartjiehouer
                 <select defaultValue={ticket.family_member_id || ""} disabled={assigning === ticket.id} onChange={(event) => void assign(ticket.id, event.target.value)}>
@@ -3294,6 +3394,38 @@ function TicketsFlow({ user, tickets, standalone = false }: { user: AppUser; tic
           ))}
         </div>
       ) : <EmptyState icon={<Ticket />} title="Geen kaartjies gevind nie" text="Nuwe aankope wat by jou bevestigde e-pos en selfoon pas, verskyn outomaties hier." />)}
+      {viewerIndex !== null && tickets[viewerIndex] && (
+        <div className="ticket-viewer-backdrop" role="dialog" aria-modal="true" onClick={() => setViewerIndex(null)}>
+          <section className="ticket-viewer" onClick={(event) => event.stopPropagation()}>
+            <button className="sheet-close" type="button" onClick={() => setViewerIndex(null)} aria-label="Maak kaartjie toe">×</button>
+            <p className="eyebrow">Wys kaartjie</p>
+            <h2>{tickets[viewerIndex].ticket_name}</h2>
+            <p className="payment-note">{viewerIndex + 1} van {tickets.length} · Swipe links/regs tussen beskikbare kaartjies.</p>
+            <div className="ticket-swipe-track">
+              {tickets.map((ticket, index) => (
+                <div className="ticket-swipe-card" key={ticket.id} ref={(node) => { ticketRefs.current[index] = node; }}>
+                  <div className="ticket-qr-panel">
+                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(ticket.qr_url)}`} alt={`QR vir ${ticket.ticket_name}`} />
+                  </div>
+                  <div className="ticket-viewer-meta">
+                    <strong>{ticket.ticket_name}</strong>
+                    <small>{ticket.event_name}{ticket.short_code ? ` · ${ticket.short_code}` : ""}</small>
+                    <small>Wys hierdie QR by die hek. Dit bly binne die app oop.</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="ticket-viewer-actions">
+              <button type="button" className="app-secondary" disabled={viewerIndex <= 0} onClick={() => setViewerIndex((current) => Math.max(0, Number(current || 0) - 1))}>
+                <ArrowLeft /> Vorige
+              </button>
+              <button type="button" className="app-secondary" disabled={viewerIndex >= tickets.length - 1} onClick={() => setViewerIndex((current) => Math.min(tickets.length - 1, Number(current || 0) + 1))}>
+                Volgende <ArrowRight />
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
 }
