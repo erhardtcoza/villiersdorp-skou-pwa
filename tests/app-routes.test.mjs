@@ -37,6 +37,10 @@ test("app deep links map to the intended grouped workflow pages", async () => {
   assert.match(source, /if \(pathname === "\/verhurings"\) return "rentals"/);
   assert.match(source, /if \(page === "horses"\) return "\/perde"/);
   assert.match(source, /if \(page === "rentals"\) return "\/verhurings"/);
+  assert.match(source, /function moduleFromBrowserQuery\(search: string\)/);
+  assert.match(source, /new URLSearchParams\(search\)\.get\("module"\)/);
+  assert.match(source, /appModules\.some\(\(item\) => item\.key === moduleKey\) \? moduleKey : null/);
+  assert.match(source, /canOpenModule\(selected\)/);
 });
 
 test("app module permissions and native review labels stay aligned", async () => {
@@ -63,7 +67,7 @@ test("app module permissions and native review labels stay aligned", async () =>
 test("native app keeps the same grouped app and POS navigation language", async () => {
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
 
-  for (const label of ["Kaartjies & Beursie", "POS & Toegang", "Perde", "Terrein & Verhurings", "Skou-inligting", "Doen perde-aansoek", "Verwerk perde-aansoeke", "Terreinbespreking", "Verhuring-goedkeuring"]) {
+  for (const label of ["Kaartjies & Beursie", "POS & Toegang", "Perde", "Uitstallers", "Terrein & Verhurings", "Skou-inligting", "Doen perde-aansoek", "Verwerk perde-aansoeke", "My Aansoek", "Uitstallerprofiel", "Uitstallerspan", "Stalletjie-aansoeke", "Terreinbespreking", "Verhuring-goedkeuring"]) {
     assert.match(nativeSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   for (const area of ["pos_area=hek", "pos_area=kroeg", "pos_area=kombuis"]) {
@@ -77,6 +81,9 @@ test("native app keeps the same grouped app and POS navigation language", async 
   assert.match(nativeSource, /group\.items\.map\(\(item\)/);
   assert.doesNotMatch(nativeSource, /group\.items\.slice\(0,\s*4\)/);
   assert.doesNotMatch(nativeSource, /verdere opsies op die PWA/);
+  assert.match(nativeSource, /roles:\s*\["vendor",\s*"staff",\s*"committee"\],\s*modules:\s*\["vendor-application",\s*"vendor-profile",\s*"vendor-team",\s*"passes",\s*"applications"\]/);
+  assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=vendor-application/);
+  assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=applications/);
 });
 
 test("app and native menu permissions exist in the backend access catalog", async () => {

@@ -1445,7 +1445,7 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
   const actualView: RoleView = user.role === "visitor" ? "visitor" : ["vendor", "exhibitor", "uitstaller"].includes(user.role) ? "vendor" : ["admin", "committee", "manager"].includes(user.role) ? "committee" : "staff";
   const [tab, setTab] = useState<AppTab>("home"),
     [preview, setPreview] = useState<RoleView>(actualView),
-    [selected, setSelected] = useState<string | null>(null),
+    [selected, setSelected] = useState<string | null>(() => typeof window === "undefined" ? null : moduleFromBrowserQuery(window.location.search)),
     [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : pageFromBrowserPath(window.location.pathname));
   const walletTotal = wallets.reduce((sum, w) => sum + w.balance_cents, 0),
     visible = appModules.filter((item) => item.roles.includes(preview) && hasAnyPermission(user, item.permissions)),
@@ -1651,7 +1651,7 @@ function Dashboard({ data, message, health, onLogout }: { data: MeResponse; mess
         <NavButton label="Kalender" icon={CalendarDays} active={page === "home" && tab === "calendar"} onClick={() => chooseTab("calendar")} />
         <NavButton label="Profiel" icon={CircleUserRound} active={page === "home" && tab === "profile"} onClick={() => chooseTab("profile")} />
       </nav>
-      {selected && <ModuleSheet moduleKey={selected} user={user} tickets={tickets} wallets={wallets} onClose={() => setSelected(null)} />}
+      {selected && canOpenModule(selected) && <ModuleSheet moduleKey={selected} user={user} tickets={tickets} wallets={wallets} onClose={() => { setSelected(null); window.history.replaceState({}, "", pagePath(page)); }} />}
     </main>
   );
 }
@@ -1668,6 +1668,11 @@ function pageFromBrowserPath(pathname: string): AppPage {
 
 function isAppDeepLinkPath(pathname: string) {
   return pageFromBrowserPath(pathname) !== "home";
+}
+
+function moduleFromBrowserQuery(search: string) {
+  const moduleKey = new URLSearchParams(search).get("module") || "";
+  return appModules.some((item) => item.key === moduleKey) ? moduleKey : null;
 }
 
 function pagePath(page: AppPage) {
