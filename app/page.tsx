@@ -387,13 +387,13 @@ const appModules: AppModule[] = [
   {
     key: "applications",
     title: "Stalletjie-aansoeke",
-    detail: "Hersien, keur goed en ken staanplekke toe",
+    detail: "Hersien app-aansoeke en stuur formele admin-opvolg",
     icon: ClipboardCheck,
     roles: ["staff", "committee"],
     permissions: ["vendors_applications", "vendors_approve"],
     href: "https://www.villiersdorpskou.co.za/admin#vendors",
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "horses",
@@ -408,13 +408,13 @@ const appModules: AppModule[] = [
   {
     key: "horse-processing",
     title: "Verwerk perde-aansoeke",
-    detail: "Personeel verwerking, goedkeuring en fakture",
+    detail: "Hersien app-inskrywings, navrae en opvolgstatus",
     icon: ClipboardCheck,
     roles: ["staff", "committee"],
     permissions: ["horses_entries", "horses_approve", "horses_programme"],
     href: "https://www.villiersdorpskou.co.za/admin#horses",
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "horse-programme",
@@ -438,11 +438,12 @@ const appModules: AppModule[] = [
   {
     key: "venue-approvals",
     title: "Terreingoedkeurings",
-    detail: "Hersien versoeke en pryse",
+    detail: "Hersien app-versoeke en merk opvolgstatus",
     icon: ClipboardCheck,
     roles: ["staff", "committee"],
     permissions: ["grounds_venues", "grounds_facilities"],
-    status: "admin",
+    live: true,
+    status: "live",
   },
   {
     key: "buildings",
@@ -466,13 +467,13 @@ const appModules: AppModule[] = [
   {
     key: "rental-approvals",
     title: "Verhuring-goedkeuring",
-    detail: "Hersien versoeke, pryse en fakture",
+    detail: "Hersien app-verhuringversoeke en opvolgstatus",
     icon: ClipboardCheck,
     roles: ["staff", "committee"],
     permissions: ["rentals_manage", "grounds_venues"],
     href: "https://www.villiersdorpskou.co.za/admin#app",
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "krymekaar",
@@ -665,9 +666,9 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     action: "Maak Kroeg POS oop",
   },
   applications: {
-    status: "Uitstaller-aansoeke word tans in die hoof admin bestuur. Die app-module is net vir toegewyde staff/committee sigbaar.",
-    ready: ["Open live admin vendors", "Access is permission-based"],
-    next: ["Maak application review app-native", "Koppel approval/rejection templates", "Koppel fakture en vendor profile verify"],
+    status: "Uitstaller-, span- en hekpasversoeke kan nou in die app hersien word. Formele staanplektoekenning en fakture bly as sekondêre admin-opvolg beskikbaar.",
+    ready: ["App-native review queue", "Status en admin-notas kan teruggeskryf word", "Access is permission-based"],
+    next: ["Koppel approval/rejection templates", "Koppel fakture en vendor profile verify", "Maak staanplektoekenning app-native"],
     action: "Maak vendor admin oop",
   },
   horses: {
@@ -676,9 +677,9 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     next: ["Koppel direk aan horse application tables", "Koppel vorige vertoners, klasse, fakture en bandjies"],
   },
   "horse-processing": {
-    status: "Personeelverwerking bly tans op die bestaande perde-admin waar aansoeke, goedkeurings, fakture en deposito’s reeds bestuur word.",
-    ready: ["Open bestaande perde-admin", "Perde permissions beskerm toegang", "Aansoeke en fakture bly op een backend"],
-    next: ["Maak die verwerking app-native", "Voeg vinnige goedkeur/afkeur aksies by", "Wys klasse en faktuurstatus in die app"],
+    status: "Perde app-versoeke kan nou in die app deur personeel hersien word. Formele klasse, fakture en deposito’s bly steeds op die bestaande perde-admin totdat daardie rekords direk gekoppel is.",
+    ready: ["App-native review queue", "Perde permissions beskerm toegang", "Status en admin-notas kan teruggeskryf word"],
+    next: ["Koppel direk aan horse application tables", "Wys klasse en faktuurstatus in die app", "Voeg deposito/bandjie/nommerstatus by"],
     action: "Maak perde admin oop",
   },
   "horse-programme": {
@@ -688,9 +689,9 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     action: "Maak perdeprogram oop",
   },
   "venue-approvals": {
-    status: "Terreinbesprekings kan deur visitors ingedien word en admin kan dit nou op dieselfde backend rekord hersien en status verander.",
+    status: "Terreinbesprekings kan deur visitors ingedien word en gemagtigde personeel kan dit nou app-native hersien en status verander.",
     ready: ["Visitor terreinbespreking is live", "Requests het status/history", "Admin kan submitted/reviewing/approved/declined/cancelled terugskryf"],
-    next: ["Voeg pricing/conditions by", "Skep faktuur na goedkeuring", "Maak die approval queue later app-native vir Gronde-komitee"],
+    next: ["Voeg pricing/conditions by", "Skep faktuur na goedkeuring", "Koppel kalender en betalingstatus"],
     href: "https://www.villiersdorpskou.co.za/admin#app",
     action: "Maak app-admin oop",
   },
@@ -705,9 +706,9 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     next: ["Koppel quote/faktuur na goedkeuring", "Maak huurkontrak/voorwaardes templates", "Wys kalender van verhuring versoeke"],
   },
   "rental-approvals": {
-    status: "Goedkeuring bly tans by die bestaande admin/app-versoeke sodat bestuur eers pryse, voorwaardes en fakture kan bevestig.",
-    ready: ["Open app-admin versoeke", "Permission-gated vir Gronde/Verhurings", "Kan status terugskryf na die app"],
-    next: ["Maak approval queue app-native", "Skep faktuur vanaf goedgekeurde aansoek", "Wys kalender en betalingstatus"],
+    status: "Verhuring- en terreinversoeke kan nou app-native deur gemagtigde personeel hersien word; pryse, voorwaardes en fakture bly die volgende formele koppeling.",
+    ready: ["App-native review queue", "Permission-gated vir Gronde/Verhurings", "Kan status terugskryf na die app"],
+    next: ["Skep faktuur vanaf goedgekeurde aansoek", "Wys kalender en betalingstatus", "Koppel huurkontrak/voorwaardes"],
     action: "Maak goedkeurings oop",
   },
   krymekaar: {
