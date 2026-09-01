@@ -26,6 +26,19 @@ test("app shell subroutes explicitly render the hydrated client app", async () =
   }
 });
 
+test("app deep links map to the intended grouped workflow pages", async () => {
+  const source = await readFile(path.join(root, "app/page.tsx"), "utf8");
+
+  assert.match(source, /if \(pathname === "\/kaartjies"\) return "tickets"/);
+  assert.match(source, /if \(pathname === "\/terreinbesprekings"\) return "venues"/);
+  assert.match(source, /if \(pathname === "\/kroeg"\) return "bar"/);
+  assert.match(source, /if \(pathname === "\/pos"\) return "pos"/);
+  assert.match(source, /if \(pathname === "\/perde" \|\| pathname === "\/horses"\) return "horses"/);
+  assert.match(source, /if \(pathname === "\/verhurings"\) return "rentals"/);
+  assert.match(source, /if \(page === "horses"\) return "\/perde"/);
+  assert.match(source, /if \(page === "rentals"\) return "\/verhurings"/);
+});
+
 test("app module permissions and native review labels stay aligned", async () => {
   const source = await readFile(path.join(root, "app/page.tsx"), "utf8");
 
