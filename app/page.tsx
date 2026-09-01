@@ -131,8 +131,35 @@ type AppPosDepartment = {
 };
 type AppPosConfig = {
   ok: boolean;
+  groups?: { id: number; event_id?: number | null; name: string; sort_order?: number }[];
+  locations?: { id: number; event_id?: number | null; group_id: number; name: string; sort_order?: number; product_count?: number }[];
   departments: AppPosDepartment[];
   event?: { id: number; name: string } | null;
+};
+type PosV1Product = {
+  id: number;
+  sku?: string | null;
+  name: string;
+  category?: string | null;
+  price_cents: number;
+  effective_price_cents: number;
+  sold_out?: number;
+};
+type PosV1Customer = {
+  id?: number | null;
+  account_no?: string | null;
+  name: string;
+  mobile?: string | null;
+  balance_cents?: number;
+  customer_type?: "customer" | "wallet";
+  wallet_id?: string | null;
+  wallet_version?: number;
+};
+type PosV1Order = {
+  id: number;
+  order_code: string;
+  status: string;
+  total_cents: number;
 };
 type PublicProgrammeItem = {
   id: number;
@@ -2229,8 +2256,7 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
   const [config, setConfig] = useState<AppPosConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [launching, setLaunching] = useState("");
-  const [launchError, setLaunchError] = useState("");
+  const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [showWalletTopup, setShowWalletTopup] = useState(false);
   const preferred = moduleKey === "bar-pos" ? "bar-pos" : moduleKey === "kitchen-pos" ? "kitchen-pos" : moduleKey === "gates" ? "gate-scanner" : "gate-pos";
   useEffect(() => {
@@ -2256,7 +2282,6 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
     key: department.area === "hek" ? "gate-pos" : department.area === "kroeg" ? "bar-pos" : department.area === "kombuis" ? "kitchen-pos" : `${department.area}-pos`,
     title: department.title,
     detail: department.detail,
-    href: department.launch_url || undefined,
     target: "pos",
     area: department.area,
     location_id: department.primary_location_id,
@@ -2275,27 +2300,20 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
   const liveKeys = new Set(scopedLiveOptions.map((option) => option.key));
   const fallbackAdditions = scopedFallbackOptions.filter((option) => !liveKeys.has(option.key));
   const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...fallbackAdditions] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
-  const launchPos = async (option: PosLaunchOption) => {
-    if (option.status !== "live") return;
-    setLaunching(option.key);
-    setLaunchError("");
-    try {
-      const result = await api("/api/app/pos/bridge", {
-        method: "POST",
-        body: JSON.stringify({
-          target: option.target || "pos",
-          pos_area: option.area || "hek",
-          location_id: option.location_id || undefined,
-        }),
-      });
-      window.location.href = result.launch_url;
-    } catch (err) {
-      setLaunchError(err instanceof Error ? err.message : "POS kon nie binne die app oopgemaak word nie");
-    } finally {
-      setLaunching("");
-    }
-  };
   if (showWalletTopup) return <PosWalletTopupPanel onBack={() => setShowWalletTopup(false)} />;
+  if (selectedArea === "scan") return <InAppScannerPanel onBack={() => setSelectedArea(null)} />;
+  const selectedDepartment = selectedArea ? ((config?.departments || []).find((department) => department.area === selectedArea) || {
+    area: selectedArea,
+    title: selectedArea === "kroeg" ? "Kroeg POS" : selectedArea === "kombuis" ? "Kombuis POS" : "Hek POS",
+    detail: "POS-afdeling word binne die app oopgemaak.",
+    badge: selectedArea.toUpperCase(),
+    status: selectedArea === "kombuis" ? "coming" : "live",
+    location_count: 0,
+    product_count: 0,
+    primary_location_id: null,
+    launch_url: null
+  }) : null;
+  if (selectedDepartment) return <InAppPosPanel department={selectedDepartment} config={config} onBack={() => setSelectedArea(null)} />;
   return (
     <>
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
@@ -2307,7 +2325,6 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
       <p>Die PWA hou die menu skoon: kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling wat in die backend opgestel word. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
       {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-afdelings…</p>}
       {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Die veilige standaard-skakels bly beskikbaar.</p>}
-      {launchError && <p className="provider-note error-note">POS kon nie oopmaak nie: {launchError}</p>}
       {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}
       <div className="pos-launch-grid">
         {ordered.map((option) => (
@@ -2320,11 +2337,11 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
               <ArrowRight />
             </button>
           ) : option.target ? (
-            <button className="pos-launch-card" type="button" key={option.key} onClick={() => launchPos(option)} disabled={option.status !== "live" || launching === option.key}>
+            <button className="pos-launch-card" type="button" key={option.key} onClick={() => option.target === "scan" ? setSelectedArea("scan") : setSelectedArea(option.area || "hek")} disabled={option.status !== "live" && option.target !== "scan"}>
               <span>{option.badge}</span>
               <strong>{option.title}</strong>
               <small>{option.detail}</small>
-              <em data-status={option.status}>{launching === option.key ? "Maak oop…" : option.status === "live" ? "Live" : "Kom binnekort"}</em>
+              <em data-status={option.status}>{option.status === "live" ? "Live in app" : "Kom binnekort"}</em>
               <ArrowRight />
             </button>
           ) : option.href ? (
@@ -2349,6 +2366,322 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
         <strong>Backend-koppeling</strong>
         <p>Hek en Kroeg gebruik reeds dieselfde POS V1 backend. Kombuis word eers live wanneer die Kombuis group/location/products in admin geskep en getoets is.</p>
       </div>
+    </>
+  );
+}
+
+function posMoney(cents: number) {
+  return `R ${(Number(cents || 0) / 100).toFixed(2)}`;
+}
+
+function getPosDeviceId() {
+  const key = "vs_app_pos_device_id";
+  let value = window.localStorage.getItem(key);
+  if (!value) {
+    value = `APP-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`.toUpperCase();
+    window.localStorage.setItem(key, value);
+  }
+  return value;
+}
+
+function getAppPosTerminal(area: string) {
+  const key = `vs_app_pos_terminal_${area}`;
+  let value = window.localStorage.getItem(key);
+  if (!value) {
+    const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
+    value = `APP-${area.slice(0, 3).toUpperCase()}-${suffix}`;
+    window.localStorage.setItem(key, value);
+  }
+  return value;
+}
+
+function InAppScannerPanel({ onBack }: { onBack: () => void }) {
+  return (
+    <>
+      <button className="sheet-secondary inline-back" type="button" onClick={onBack}>
+        <ArrowLeft /> Terug na POS-afdelings
+      </button>
+      <span className="detail-icon"><ScanLine /></span>
+      <p className="eyebrow">Hek scan</p>
+      <h2>Scan in / uit</h2>
+      <p className="request-intro">Hierdie skerm bly nou binne die app. Die kamera-skandeerder self word volgende app-native gekoppel aan dieselfde ticket scan backend.</p>
+      <div className="handoff">
+        <strong>Nie meer ’n redirect nie</strong>
+        <p>Tot die kamera-komponent volledig in die app klaar is, wys hierdie module as ’n in-app opvolgtaak in plaas daarvan om na die ou skerm te spring.</p>
+      </div>
+    </>
+  );
+}
+
+function InAppPosPanel({ department, config, onBack }: { department: AppPosDepartment; config: AppPosConfig | null; onBack: () => void }) {
+  const [locationId, setLocationId] = useState<number>(department.primary_location_id || 0);
+  const [products, setProducts] = useState<PosV1Product[]>([]);
+  const [basket, setBasket] = useState<Record<number, number>>({});
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customers, setCustomers] = useState<PosV1Customer[]>([]);
+  const [customer, setCustomer] = useState<PosV1Customer | null>(null);
+  const [method, setMethod] = useState<"cash" | "yoco_manual" | "event_balance">("cash");
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [lease, setLease] = useState<{ terminal_code: string; device_instance_id: string; lease_token: string; expires_at?: number } | null>(null);
+  const [orderCode, setOrderCode] = useState("");
+  const locations = (config?.locations || []).filter((location) => {
+    if (department.primary_location_id && Number(location.id) === Number(department.primary_location_id)) return true;
+    const group = (config?.groups || []).find((item) => Number(item.id) === Number(location.group_id));
+    const label = `${group?.name || ""} ${location.name || ""}`.toLowerCase();
+    if (department.area === "kroeg") return label.includes("kroeg") || label.includes("bar");
+    if (department.area === "kombuis") return label.includes("kombuis") || label.includes("kitchen") || label.includes("kos");
+    if (department.area === "hek") return label.includes("hek") || label.includes("gate") || label.includes("ticket");
+    return true;
+  });
+  const currentLocation = locations.find((item) => Number(item.id) === Number(locationId)) || locations[0] || null;
+  const basketLines = Object.entries(basket)
+    .map(([id, qty]) => ({ product: products.find((product) => Number(product.id) === Number(id)), qty }))
+    .filter((line): line is { product: PosV1Product; qty: number } => Boolean(line.product) && line.qty > 0);
+  const total = basketLines.reduce((sum, line) => sum + Number(line.product.effective_price_cents || line.product.price_cents || 0) * line.qty, 0);
+  const setQty = (product: PosV1Product, qty: number) => {
+    setBasket((current) => {
+      const next = { ...current };
+      const safeQty = Math.max(0, Math.min(99, qty));
+      if (!safeQty) delete next[product.id];
+      else next[product.id] = safeQty;
+      return next;
+    });
+  };
+  const loadProducts = useCallback(async (id: number) => {
+    if (!id) return;
+    setBusy("products");
+    setError("");
+    try {
+      const result = await api(`/api/pos-v1/products?location_id=${encodeURIComponent(id)}`);
+      setProducts(result.products || []);
+      setBasket({});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Produkte kon nie gelaai word nie");
+      setProducts([]);
+    } finally {
+      setBusy("");
+    }
+  }, []);
+  const prepareTerminal = useCallback(async (id: number) => {
+    if (!id || department.status !== "live") return;
+    setBusy("terminal");
+    setError("");
+    try {
+      await api("/api/app/pos/bridge", {
+        method: "POST",
+        body: JSON.stringify({ target: "pos", pos_area: department.area, location_id: id }),
+      });
+      const terminal_code = getAppPosTerminal(department.area);
+      const device_instance_id = getPosDeviceId();
+      await api("/api/pos-v1/terminal/register", {
+        method: "POST",
+        body: JSON.stringify({
+          terminal_code,
+          device_name: `Skou App ${department.title}`,
+          location_id: id,
+          mode: department.area,
+          platform: "pwa",
+          user_agent: window.navigator.userAgent,
+          capabilities: { app_native_pos: true },
+        }),
+      });
+      const acquired = await api("/api/pos-v1/terminal/lease/acquire", {
+        method: "POST",
+        body: JSON.stringify({ terminal_code, device_instance_id, force: false }),
+      });
+      setLease({ terminal_code, device_instance_id, lease_token: acquired.lease_token, expires_at: acquired.expires_at });
+      await loadProducts(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "POS kon nie binne die app voorberei word nie");
+    } finally {
+      setBusy("");
+    }
+  }, [department.area, department.status, department.title, loadProducts]);
+  useEffect(() => {
+    const id = department.primary_location_id || locations[0]?.id || 0;
+    setLocationId(Number(id || 0));
+    if (id) void prepareTerminal(Number(id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [department.area, department.primary_location_id]);
+  const searchCustomers = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (customerQuery.trim().length < 2) return;
+    setBusy("customers");
+    setError("");
+    try {
+      const result = await api(`/api/pos-v1/customers/search?q=${encodeURIComponent(customerQuery.trim())}`);
+      setCustomers(result.customers || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kliënt/beursie kon nie gesoek word nie");
+    } finally {
+      setBusy("");
+    }
+  };
+  const completeSale = async () => {
+    if (!currentLocation?.id || !lease || !basketLines.length) return;
+    if (method === "event_balance" && !customer?.wallet_id) {
+      setError("Kies eers ’n beursie-kliënt voor jy met skoubeursie betaal.");
+      return;
+    }
+    if (method === "event_balance" && Number(customer?.balance_cents || 0) < total) {
+      setError(`Beursiebalans onvoldoende. Balans: ${posMoney(Number(customer?.balance_cents || 0))}; totaal: ${posMoney(total)}.`);
+      return;
+    }
+    setBusy("sale");
+    setError("");
+    setMessage("");
+    try {
+      const common = {
+        ...lease,
+        event_id: config?.event?.id,
+        group_id: currentLocation.group_id,
+        location_id: currentLocation.id,
+        terminal_code: lease.terminal_code,
+      };
+      const orderResult = await api("/api/pos-v1/orders", {
+        method: "POST",
+        body: JSON.stringify({
+          ...common,
+          customer_id: customer?.id || null,
+          customer_name: customer?.name || null,
+          customer_mobile: customer?.mobile || null,
+          wallet_id: customer?.wallet_id || null,
+          items: basketLines.map((line) => ({ product_id: line.product.id, qty: line.qty })),
+          idempotency_key: `${lease.terminal_code}:app-order:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+        }),
+      });
+      const order: PosV1Order = orderResult.order;
+      await api(`/api/pos-v1/orders/${encodeURIComponent(order.id)}/pay`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...common,
+          method,
+          provider_reference: method === "yoco_manual" ? reference || `APP-YOCO-${order.order_code}` : reference || null,
+          idempotency_key: `${lease.terminal_code}:app-pay:${order.id}:${Date.now()}`,
+        }),
+      });
+      await api(`/api/pos-v1/orders/${encodeURIComponent(order.id)}/fulfil`, {
+        method: "POST",
+        body: JSON.stringify({ ...common, all_delivered: true }),
+      });
+      setOrderCode(order.order_code);
+      setBasket({});
+      setReference("");
+      setMessage(`${department.title} verkoop voltooi: ${order.order_code} · ${posMoney(order.total_cents || total)}.`);
+      if (method === "event_balance" && customer?.wallet_id) {
+        const refreshed = await api(`/api/wallets/${encodeURIComponent(customer.wallet_id)}`).catch(() => null);
+        if (refreshed?.wallet) setCustomer((current) => current ? { ...current, balance_cents: refreshed.wallet.balance_cents } : current);
+      }
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "Verkoop kon nie voltooi word nie";
+      setError(raw === "insufficient_balance" ? "Beursiebalans onvoldoende. Die sale is nie voltooi nie." : raw);
+    } finally {
+      setBusy("");
+    }
+  };
+  const groupedProducts = products.reduce<Record<string, PosV1Product[]>>((groups, product) => {
+    const key = product.category || (department.area === "hek" ? "Kaartjies" : department.title);
+    (groups[key] ||= []).push(product);
+    return groups;
+  }, {});
+  return (
+    <>
+      <button className="sheet-secondary inline-back" type="button" onClick={onBack}>
+        <ArrowLeft /> Terug na POS-afdelings
+      </button>
+      <span className="detail-icon"><Store /></span>
+      <p className="eyebrow">POS binne app</p>
+      <h2>{department.title}</h2>
+      <p className="request-intro">{department.area === "hek" ? "Hekkaartjies en toegangprodukte." : department.area === "kroeg" ? "Kroegitems, beursiebetalings, kontant en Yoco-kaart." : "Kombuisitems sodra die afdeling opgestel is."}</p>
+      {department.status !== "live" && <p className="provider-note">Hierdie POS-afdeling is nog nie live opgestel nie. Kontak admin om locations/products te koppel.</p>}
+      {locations.length > 1 && (
+        <label className="pos-location-select">Ligging
+          <select value={locationId} onChange={(event) => { const id = Number(event.target.value); setLocationId(id); void prepareTerminal(id); }}>
+            {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+          </select>
+        </label>
+      )}
+      {busy === "terminal" || busy === "products" ? <p className="loading-line"><RefreshCw className="spin" /> Laai {department.title}…</p> : null}
+      {lease && <p className="provider-note">Terminal: {lease.terminal_code} · alles bly binne die app.</p>}
+      {error && <p className="form-error">{error}</p>}
+      {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+      {!currentLocation && <EmptyState icon={<Store />} title="Geen POS-ligging gevind nie" text="Koppel eers ’n location en produkte vir hierdie afdeling in admin." />}
+      {currentLocation && (
+        <div className="app-pos-layout">
+          <section className="app-pos-sale topup-panel">
+            <div className="purchase-heading">
+              <div>
+                <strong>Current sale</strong>
+                <small>{basketLines.length} produklyn(e)</small>
+              </div>
+              <span>{posMoney(total)}</span>
+            </div>
+            {basketLines.length ? basketLines.map((line) => (
+              <div className="app-pos-basket-line" key={line.product.id}>
+                <div><strong>{line.product.name}</strong><small>{posMoney(Number(line.product.effective_price_cents || line.product.price_cents || 0))} elk</small></div>
+                <div className="quantity-control">
+                  <button type="button" onClick={() => setQty(line.product, line.qty - 1)}>−</button>
+                  <b>{line.qty}</b>
+                  <button type="button" onClick={() => setQty(line.product, line.qty + 1)}>+</button>
+                </div>
+              </div>
+            )) : <p className="payment-note">Basket is leeg.</p>}
+            <form className="app-pos-customer" onSubmit={searchCustomers}>
+              <label>Kliënt / beursie
+                <input value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} placeholder="Naam, selfoon of beursie-ID" />
+              </label>
+              <button className="app-secondary" disabled={busy === "customers" || customerQuery.trim().length < 2}>{busy === "customers" ? "Soek…" : "Soek"}</button>
+            </form>
+            {customers.length > 0 && (
+              <div className="app-pos-customer-list">
+                {customers.map((item) => (
+                  <button type="button" key={`${item.customer_type}-${item.wallet_id || item.id || item.account_no}`} className={customer === item ? "selected" : ""} onClick={() => { setCustomer(item); setMethod(item.wallet_id ? "event_balance" : method); }}>
+                    <strong>{item.name}</strong>
+                    <small>{item.wallet_id ? `${item.wallet_id} · ${posMoney(Number(item.balance_cents || 0))}` : item.mobile || item.account_no}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="amount-options payment-method-options">
+              <button type="button" className={method === "cash" ? "active" : ""} onClick={() => setMethod("cash")}>Kontant</button>
+              <button type="button" className={method === "yoco_manual" ? "active" : ""} onClick={() => setMethod("yoco_manual")}>Yoco kaart</button>
+              <button type="button" className={method === "event_balance" ? "active" : ""} onClick={() => setMethod("event_balance")}>Beursie</button>
+            </div>
+            {method === "yoco_manual" && <label>Yoco verwysing / nota
+              <input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Opsioneel, bv. strokie of terminal ref" />
+            </label>}
+            {method === "event_balance" && <p className="payment-note">Die backend keer die sale indien die beursie nie genoeg balans het nie.</p>}
+            <button className="app-primary" type="button" disabled={!lease || !basketLines.length || busy === "sale"} onClick={() => void completeSale()}>
+              {busy === "sale" ? <RefreshCw className="spin" /> : <ShieldCheck />}
+              {busy === "sale" ? "Voltooi…" : `Voltooi sale · ${posMoney(total)}`}
+            </button>
+            {orderCode && <small className="payment-note">Laaste order: {orderCode}</small>}
+          </section>
+          <section className="app-pos-products">
+            {Object.entries(groupedProducts).map(([category, items]) => (
+              <div className="app-pos-category" key={category}>
+                <h3>{category}</h3>
+                <div className="app-pos-product-grid">
+                  {items.map((product) => {
+                    const qty = basket[product.id] || 0;
+                    return (
+                      <button className={`app-pos-product ${qty ? "selected" : ""}`} type="button" key={product.id} disabled={Boolean(product.sold_out)} onClick={() => setQty(product, qty + 1)}>
+                        <strong>{product.name}</strong>
+                        <small>{posMoney(Number(product.effective_price_cents || product.price_cents || 0))}</small>
+                        {qty ? <span>{qty}</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {!products.length && department.status === "live" && busy !== "products" && <EmptyState icon={<Store />} title="Geen produkte gelaai nie" text="Hierdie location het nog nie aktiewe produkte gekoppel nie, of jou sessie het verval." />}
+          </section>
+        </div>
+      )}
     </>
   );
 }

@@ -77,10 +77,16 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?target:\s*"pos"[\s\S]*?area:\s*"kombuis"/);
   assert.match(source, /key:\s*"gate-scanner"[\s\S]*?target:\s*"scan"/);
   assert.match(source, /api\("\/api\/app\/pos\/bridge"/);
-  assert.match(source, /window\.location\.href = result\.launch_url/);
+  assert.doesNotMatch(source, /window\.location\.href = result\.launch_url/);
+  assert.match(source, /function InAppPosPanel/);
+  assert.match(source, /api\(`\/api\/pos-v1\/products\?location_id=/);
+  assert.match(source, /api\("\/api\/pos-v1\/orders"/);
+  assert.match(source, /api\(`\/api\/pos-v1\/orders\/\$\{encodeURIComponent\(order\.id\)\}\/pay`/);
+  assert.match(source, /api\(`\/api\/pos-v1\/orders\/\$\{encodeURIComponent\(order\.id\)\}\/fulfil`/);
+  assert.match(source, /method === "event_balance" && Number\(customer\?\.balance_cents \|\| 0\) < total/);
   assert.doesNotMatch(source, /https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=/);
   assert.doesNotMatch(source, /https:\/\/tickets\.villiersdorpskou\.co\.za\/scan/);
-  assert.match(source, /href:\s*department\.launch_url \|\| undefined/);
+  assert.doesNotMatch(source, /href:\s*department\.launch_url \|\| undefined/);
   const fallbackPosOptions = source.slice(source.indexOf("const posLaunchOptions:"), source.indexOf("const appModules:"));
   const fallbackKitchenOption = fallbackPosOptions.slice(fallbackPosOptions.indexOf('key: "kitchen-pos"'), fallbackPosOptions.indexOf('key: "gate-scanner"'));
   assert.match(fallbackKitchenOption, /status:\s*"coming"/);
@@ -111,9 +117,12 @@ test("native app keeps the same grouped app and POS navigation language", async 
   assert.match(nativeSource, /Beursie aanvulling/);
   assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=wallet-topup/);
   assert.doesNotMatch(nativeSource, /\/bar\/topup/);
-  for (const area of ["pos_area=hek", "pos_area=kroeg", "pos_area=kombuis"]) {
-    assert.match(nativeSource, new RegExp(area));
-  }
+  assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=pos/);
+  assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=bar-pos/);
+  assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=kitchen-pos/);
+  assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=gates/);
+  assert.doesNotMatch(nativeSource, /\/app\?pos_area=/);
+  assert.doesNotMatch(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/scan/);
   assert.match(nativeSource, /permissions\?: string\[\]/);
   assert.match(nativeSource, /function canUseModule\(user: User, item: Module\)/);
   assert.match(nativeSource, /canUseModule\(me\.user, item\)/);
@@ -208,12 +217,15 @@ test("app health route checks the app backend and ticket catalogue", async () =>
   assert.match(workerSource, /payload\.checks\.ticket_catalogue/);
 });
 
-test("app worker keeps POS V1 and scanner sessions inside the app domain", async () => {
+test("app worker keeps POS V1 APIs but redirects legacy POS pages back into the app", async () => {
   const workerSource = await readFile(path.join(root, "worker/index.ts"), "utf8");
 
   assert.match(workerSource, /async function proxyBackend\(request: Request, upstreamPath\?: string\)/);
   assert.match(workerSource, /url\.pathname === "\/app"/);
   assert.match(workerSource, /url\.pathname === "\/scan"/);
+  assert.match(workerSource, /Response\.redirect\(new URL\(`\/\?module=\$\{encodeURIComponent\(module\)\}`/);
+  assert.match(workerSource, /posArea === "kroeg"[\s\S]*\? "bar-pos"/);
+  assert.match(workerSource, /posArea === "kombuis"[\s\S]*\? "kitchen-pos"/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/pos\/"\)/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/scan\/"\)/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/media\/"\)/);

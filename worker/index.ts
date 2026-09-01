@@ -127,7 +127,19 @@ const worker = {
       });
     }
 
-    const isBackendPage = url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/pos/") || url.pathname.startsWith("/scan/");
+    if (url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/scan/")) {
+      const posArea = url.searchParams.get("pos_area");
+      const module = url.pathname === "/scan" || url.pathname.startsWith("/scan/")
+        ? "gates"
+        : posArea === "kroeg"
+          ? "bar-pos"
+          : posArea === "kombuis"
+            ? "kitchen-pos"
+            : "pos";
+      return Response.redirect(new URL(`/?module=${encodeURIComponent(module)}`, url.origin), 302);
+    }
+
+    const isBackendPage = url.pathname.startsWith("/pos/");
     const isBackendMedia = url.pathname.startsWith("/media/");
     const isBackendApi = url.pathname.startsWith("/api/");
     if (isBackendPage || isBackendMedia || isBackendApi) {
