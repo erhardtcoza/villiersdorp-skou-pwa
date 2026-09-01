@@ -202,7 +202,7 @@ test("app worker keeps POS and scanner flows under the app domain", async () => 
   assert.match(workerSource, /async function proxyBackend\(request: Request, upstreamPath\?: string\)/);
   assert.match(workerSource, /url\.pathname === "\/pos-terminal"[\s\S]*proxyBackend\(request,\s*`\/app\$\{url\.search\}`\)/);
   assert.match(workerSource, /url\.pathname === "\/scan-terminal"[\s\S]*proxyBackend\(request,\s*`\/scan\$\{url\.search\}`\)/);
-  assert.match(workerSource, /url\.pathname === "\/app" \|\| url\.pathname === "\/scan" \|\| url\.pathname\.startsWith\("\/pos\/"\)/);
+  assert.match(workerSource, /url\.pathname === "\/app" \|\| url\.pathname === "\/scan" \|\| url\.pathname\.startsWith\("\/pos\/"\) \|\| url\.pathname\.startsWith\("\/scan\/"\)/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/api\/auth\/"\)/);
   assert.match(workerSource, /proxiedHeaders\.set\("location",\s*rewritten\)/);
 });

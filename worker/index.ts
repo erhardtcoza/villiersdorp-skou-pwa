@@ -136,7 +136,7 @@ const worker = {
     if (url.pathname === "/scan-terminal") {
       return proxyBackend(request, `/scan${url.search}`);
     }
-    if (url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/pos/") || url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/api/pos/") || url.pathname.startsWith("/api/scan/")) {
+    if (url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/pos/") || url.pathname.startsWith("/scan/") || url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/api/pos/") || url.pathname.startsWith("/api/scan/")) {
       return proxyBackend(request);
     }
 
