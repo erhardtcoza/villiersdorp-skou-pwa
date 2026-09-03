@@ -73,7 +73,7 @@ export default function StatusPage() {
     <main className="status-page">
       <section className="status-hero">
         <div>
-          <Image src="/images/villiersdorp-logo.png" alt="Villiersdorp Landbou Skou" width={136} height={78} priority />
+          <Image src="/skou-crest.png" alt="Villiersdorp Landbou Skou" width={96} height={96} priority />
           <p>Stelselstatus</p>
           <h1>Skou-app health</h1>
           <span>Veilige publieke toets vir die app, tickets en API-koppeling.</span>
