@@ -2465,6 +2465,10 @@ function getAppPosTerminal(area: string) {
 // unlike payment and wallet writes, and development service bindings can take
 // longer than the generic API deadline while cold-starting.
 const POS_BRIDGE_TIMEOUT_MS = 45_000;
+// The finance register refreshes existing canonical records before reading.
+// This is a retry-safe read path and may wait for a cold service binding; it
+// must not share the shorter unknown-outcome deadline used by money writes.
+const FINANCE_READ_TIMEOUT_MS = 45_000;
 
 function InAppScannerPanel({ onBack }: { onBack: () => void }) {
   const [gates, setGates] = useState<GateOption[]>([]);
@@ -3179,7 +3183,7 @@ function FinancePanel() {
     setLoading(true);
     setError("");
     try {
-      const result = await api("/api/app/staff/finance/invoices?limit=200");
+      const result = await api("/api/app/staff/finance/invoices?limit=200", undefined, FINANCE_READ_TIMEOUT_MS);
       setInvoices(Array.isArray(result.invoices) ? result.invoices : []);
       setSummary(result.summary || { total: 0, paid: 0, outstanding: 0, cancelled: 0, overdue: 0, total_cents: 0, outstanding_cents: 0 });
     } catch (err) {

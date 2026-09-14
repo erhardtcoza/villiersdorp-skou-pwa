@@ -68,7 +68,8 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /api\("\/api\/app\/messages"\)/);
   assert.match(source, /moduleKey === "wallet-topup"[\s\S]*<PosWalletTopupPanel/);
   assert.match(source, /moduleKey === "finance"[\s\S]*<FinancePanel/);
-  assert.match(source, /function FinancePanel\(\)[\s\S]*api\("\/api\/app\/staff\/finance\/invoices\?limit=200"\)/);
+  assert.match(source, /const FINANCE_READ_TIMEOUT_MS = 45_000/);
+  assert.match(source, /function FinancePanel\(\)[\s\S]*api\("\/api\/app\/staff\/finance\/invoices\?limit=200", undefined, FINANCE_READ_TIMEOUT_MS\)/);
   assert.match(source, /Die sentrale register wys bestaande fakture uit elke afdeling/);
   assert.match(source, /api\(`\/api\/app\/staff\/wallets\/lookup\?q=\$\{encodeURIComponent\(query\.trim\(\)\)\}`\)/);
   assert.match(source, /api\("\/api\/app\/staff\/wallets\/create"/);
