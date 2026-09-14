@@ -119,6 +119,7 @@ test("app module permissions and native review labels stay aligned", async () =>
 
 test("native app keeps the same grouped app and POS navigation language", async () => {
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
+  const appSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
 
   for (const label of ["Kaartjies & Beursie", "POS & Toegang", "Perde", "Uitstallers", "Terrein & Verhurings", "Skou-inligting", "Bestuur", "Doen perde-aansoek", "Verwerk perde-aansoeke", "My Aansoek", "Uitstallerprofiel", "Uitstallerspan", "Stalletjie-aansoeke", "Terreinbespreking", "Terreingoedkeurings", "Verhuring-goedkeuring", "Geboue", "Skoufoto’s", "Finansies", "Vergaderings", "Krymekaar & Slaglam", "Gebruikers & Rolle"]) {
     assert.match(nativeSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -141,6 +142,10 @@ test("native app keeps the same grouped app and POS navigation language", async 
   assert.doesNotMatch(nativeSource, /group\.items\.slice\(0,\s*4\)/);
   assert.doesNotMatch(nativeSource, /verdere opsies op die PWA/);
   assert.match(nativeSource, /roles:\s*\["vendor",\s*"staff",\s*"committee"\],\s*modules:\s*\["vendor-application",\s*"vendor-profile",\s*"vendor-team",\s*"passes",\s*"applications"\]/);
+  assert.match(appSource, /moduleKey === "vendor-profile" \? \([\s\S]*?<VendorProfilePanel/);
+  assert.match(appSource, /function VendorProfilePanel[\s\S]*?api\("\/api\/app\/vendor\/me"\)/);
+  assert.match(appSource, /api\("\/api\/app\/vendor\/me", \{ method: "PATCH"/);
+  assert.match(appSource, /bevestigde e-posadres én selfoonnommer/i);
   assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=vendor-application/);
   assert.match(nativeSource, /https:\/\/app\.villiersdorpskou\.co\.za\/\?module=applications/);
   for (const deepLink of ["membership", "programme", "map", "photos", "venue-approvals", "buildings", "finance", "meetings", "krymekaar", "users", "reports"]) {

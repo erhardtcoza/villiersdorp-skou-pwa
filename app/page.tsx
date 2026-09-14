@@ -373,6 +373,23 @@ type AppInvoice = {
   due_at?: number | null;
   cancel_reason?: string | null;
 };
+type AppVendorProfile = {
+  id: number;
+  event_id: number;
+  name: string;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  site_no?: string | null;
+  stall_type?: string | null;
+  description?: string | null;
+  facebook?: string | null;
+  instagram?: string | null;
+  website?: string | null;
+  status?: string | null;
+  portal_status?: string | null;
+  is_published?: boolean;
+};
 
 const roleNames: Record<string, string> = {
   admin: "Administrateur",
@@ -2298,6 +2315,8 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
           <PosWalletTopupPanel key={user.id} userId={user.id} />
         ) : moduleKey === "finance" ? (
           <FinancePanel />
+        ) : moduleKey === "vendor-profile" ? (
+          <VendorProfilePanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : requestModuleDetails[moduleKey] ? (
           <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
         ) : moduleKey === "horse-processing" && staffReview ? (
@@ -3223,6 +3242,68 @@ function FinancePanel() {
       </article>)}
     </div> : <EmptyState icon={<WalletCards />} title="Geen fakture gevind nie" text="Pas die filters aan of verfris die sentrale register." />}
   </div>;
+}
+
+function VendorProfilePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const [vendor, setVendor] = useState<AppVendorProfile | null>(null);
+  const [reason, setReason] = useState<string | null>(null);
+  const [eventName, setEventName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const result = await api("/api/app/vendor/me");
+      setVendor(result.vendor || null);
+      setReason(result.reason || null);
+      setEventName(result.event?.name || "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Uitstellerprofiel kon nie gelaai word nie");
+    } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); if (!vendor || busy) return;
+    setBusy(true); setError(""); setMessage("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const result = await api("/api/app/vendor/me", { method: "PATCH", body: JSON.stringify({
+        contact_name: form.get("contact_name"), description: form.get("description"), facebook: form.get("facebook"),
+        instagram: form.get("instagram"), website: form.get("website")
+      }) });
+      setVendor(result.vendor); setMessage("Jou uitstellerprofiel is gestoor.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Profiel kon nie gestoor word nie"); }
+    finally { setBusy(false); }
+  };
+  const linkCopy: Record<string, string> = {
+    verification_required: "Bevestig eers jou app-e-posadres voordat ons jou bestaande uitstellerrekord kan koppel.",
+    verified_contact_pair_required: "Voeg ’n bevestigde e-posadres én selfoonnommer by jou app-rekening om jou uitstellerrekord veilig te koppel.",
+    vendor_not_linked: "Geen bestaande uitstellerrekord stem met jou bevestigde e-posadres én selfoonnommer ooreen nie. Kontak die Skoukantoor om dit te koppel.",
+    multiple_vendor_matches: "Meer as een uitstellerrekord stem met jou besonderhede ooreen. Die Skoukantoor moet die korrekte rekord koppel.",
+    no_active_event: "Daar is nie tans ’n aktiewe skou gekies nie."
+  };
+  return <>
+    <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+    <p className="eyebrow">Uitstallers</p><h2>{moduleInfo?.title || "Uitstellerprofiel"}</h2>
+    <p className="request-intro">Hierdie skerm wys en wysig jou bestaande uitstellerrekord. Staanplek, faktuur, passe en publisering word steeds deur die Skoukantoor beheer.</p>
+    {eventName && <p className="provider-note">Gekoppel aan: {eventName}</p>}
+    {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+    {error && <p className="form-error">{error}</p>}
+    {loading ? <p className="loading-line"><RefreshCw className="spin" /> Laai uitstellerprofiel…</p> : !vendor ? <>
+      <EmptyState icon={ModuleIcon ? <ModuleIcon /> : <Store />} title="Uitstellerrekord nog nie gekoppel nie" text={linkCopy[reason || "vendor_not_linked"] || linkCopy.vendor_not_linked} />
+      <button className="sheet-secondary" onClick={() => void load()}><RefreshCw /> Probeer weer</button>
+    </> : <form className="service-request-form" onSubmit={save}>
+      <div className="module-status-grid"><section><strong>{vendor.name}</strong><ul><li>{vendor.site_no ? `Staanplek ${vendor.site_no}` : "Staanplek word deur die Skoukantoor toegeken"}</li><li>{vendor.stall_type || "Stalletjie-tipe word nog bevestig"}</li><li>Status: {serviceStatusLabel(vendor.status || vendor.portal_status || "submitted")}</li></ul></section><section><strong>Rekening-kontak</strong><ul><li>{vendor.email || "Geen e-pos"}</li><li>{vendor.phone || "Geen selfoon"}</li><li>Kontakdetails verander in jou app-rekening of via die Skoukantoor.</li></ul></section></div>
+      <label>Kontakpersoon<input name="contact_name" required defaultValue={vendor.contact_name || ""} /></label>
+      <label>Openbare beskrywing<textarea name="description" maxLength={2000} defaultValue={vendor.description || ""} placeholder="Vertel besoekers kortliks van jou stalletjie of besigheid." /></label>
+      <div className="venue-form-grid"><label>Facebook<input name="facebook" defaultValue={vendor.facebook || ""} /></label><label>Instagram<input name="instagram" defaultValue={vendor.instagram || ""} /></label></div>
+      <label>Webwerf<input name="website" inputMode="url" defaultValue={vendor.website || ""} /></label>
+      <button className="sheet-primary" disabled={busy}>{busy ? <RefreshCw className="spin" /> : <CheckCircle2 />}{busy ? "Stoor…" : "Stoor profiel"}</button>
+      <button type="button" className="sheet-secondary" disabled={busy} onClick={() => void load()}><RefreshCw /> Herlaai rekord</button>
+    </form>}
+  </>;
 }
 
 function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: string; moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
