@@ -1210,7 +1210,7 @@ export default function HomePage() {
           identifier: form.get("identifier"),
           password: form.get("password"),
         }),
-      });
+      }, AUTH_TIMEOUT_MS);
       await loadMe();
       if (result.requires_verification) setView("verify");
     } catch (err) {
@@ -2469,6 +2469,9 @@ const POS_BRIDGE_TIMEOUT_MS = 45_000;
 // This is a retry-safe read path and may wait for a cold service binding; it
 // must not share the shorter unknown-outcome deadline used by money writes.
 const FINANCE_READ_TIMEOUT_MS = 45_000;
+// Authentication establishes only a signed session and can be retried after a
+// cold binding, unlike financial mutation requests with unknown outcomes.
+const AUTH_TIMEOUT_MS = 45_000;
 
 function InAppScannerPanel({ onBack }: { onBack: () => void }) {
   const [gates, setGates] = useState<GateOption[]>([]);
