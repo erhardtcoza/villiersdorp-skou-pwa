@@ -78,6 +78,9 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /key:\s*"bar-pos"[\s\S]*?target:\s*"pos"[\s\S]*?area:\s*"kroeg"/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?target:\s*"pos"[\s\S]*?area:\s*"kombuis"/);
   assert.match(source, /key:\s*"gate-scanner"[\s\S]*?target:\s*"scan"/);
+  assert.match(source, /const POS_BRIDGE_TIMEOUT_MS = 45_000/);
+  assert.match(source, /api\("\/api\/app\/pos\/bridge", \{ method: "POST", body: JSON\.stringify\(\{ target: "scan", pos_area: "hek" \}\) \}, POS_BRIDGE_TIMEOUT_MS\)/);
+  assert.match(source, /api\('\/api\/app\/pos\/bridge',\{method:'POST',body:JSON\.stringify\(\{target:'pos',pos_area:area,location_id:locationId\}\)\},POS_BRIDGE_TIMEOUT_MS\)/);
   assert.match(source, /api\("\/api\/app\/pos\/bridge"/);
   assert.doesNotMatch(source, /window\.location\.href = result\.launch_url/);
   assert.match(source, /function InAppPosPanel/);

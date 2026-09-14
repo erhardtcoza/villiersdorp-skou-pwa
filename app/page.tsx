@@ -2446,6 +2446,11 @@ function getAppPosTerminal(area: string) {
   return value;
 }
 
+// The bridge only establishes a same-origin staff session. It is safe to retry,
+// unlike payment and wallet writes, and development service bindings can take
+// longer than the generic API deadline while cold-starting.
+const POS_BRIDGE_TIMEOUT_MS = 45_000;
+
 function InAppScannerPanel({ onBack }: { onBack: () => void }) {
   const [gates, setGates] = useState<GateOption[]>([]);
   const [gateId, setGateId] = useState<number>(0);
@@ -2460,7 +2465,7 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
     setBusy("setup");
     setError("");
     try {
-      await api("/api/app/pos/bridge", { method: "POST", body: JSON.stringify({ target: "scan", pos_area: "hek" }) });
+      await api("/api/app/pos/bridge", { method: "POST", body: JSON.stringify({ target: "scan", pos_area: "hek" }) }, POS_BRIDGE_TIMEOUT_MS);
       const gatesResult = await api("/api/scan/gates");
       const liveGates: GateOption[] = gatesResult.gates || [];
       setGates(liveGates);
@@ -2504,7 +2509,7 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
     setError("");
     setMessage("");
     try {
-      await api("/api/app/pos/bridge", { method: "POST", body: JSON.stringify({ target: "scan", pos_area: "hek" }) });
+      await api("/api/app/pos/bridge", { method: "POST", body: JSON.stringify({ target: "scan", pos_area: "hek" }) }, POS_BRIDGE_TIMEOUT_MS);
       const endpoint = direction === "check" ? "/api/scan/check" : "/api/scan/action";
       const payload = direction === "check"
         ? { code: value }
@@ -2694,7 +2699,7 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
       await api("/api/app/pos/bridge", {
         method: "POST",
         body: JSON.stringify({ target: "pos", pos_area: effectiveDepartment.area, location_id: id }),
-      });
+      }, POS_BRIDGE_TIMEOUT_MS);
       const terminal_code = recoveryTerminal || getAppPosTerminal(effectiveDepartment.area);
       const device_instance_id = getPosDeviceId();
       await api("/api/pos-v1/terminal/register", {
@@ -3965,7 +3970,7 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
       const group=config.groups?.find(g=>g.id===loc?.group_id);
       const label=`${group?.name||''} ${loc?.name||''}`.toLowerCase();
       const area=/bar|kroeg/.test(label)?'kroeg':/kitchen|kombuis|kos/.test(label)?'kombuis':'hek';
-      await api('/api/app/pos/bridge',{method:'POST',body:JSON.stringify({target:'pos',pos_area:area,location_id:locationId})});
+      await api('/api/app/pos/bridge',{method:'POST',body:JSON.stringify({target:'pos',pos_area:area,location_id:locationId})},POS_BRIDGE_TIMEOUT_MS);
       const terminal_code=pending?.terminal_code||getAppPosTerminal(area),device_instance_id=getPosDeviceId();
       await api('/api/pos-v1/terminal/register',{method:'POST',body:JSON.stringify({terminal_code,location_id:locationId,event_id:config.event.id,mode:area,platform:'pwa',device_name:'Skou App beursie'})});
       const acquired=await api('/api/pos-v1/terminal/lease/acquire',{method:'POST',body:JSON.stringify({terminal_code,device_instance_id,force:false})});
