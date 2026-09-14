@@ -2,7 +2,20 @@
 
 import { Activity, ArrowLeft, ArrowRight, Bell, CalendarDays, CheckCircle2, ChevronRight, CircleUserRound, ClipboardCheck, Eye, EyeOff, Home, Images, KeyRound, Landmark, LogIn, LogOut, MapPinned, MessageCircle, QrCode, RefreshCw, ScanLine, ShieldCheck, Store, Ticket, Trophy, UserPlus, Users, WalletCards, type LucideIcon } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { createCheckout, PendingWebPOS } from "../lib/pos-checkout";
+import { changePOSLocation, initialPOSContext } from "../lib/pos-location-change";
+import { api } from "../lib/app-api";
+import { createRefundJournal, refundOutcome, type PendingRefund, type RefundDraft } from "../lib/refund-journal";
+import { currentTicketEvent } from "../lib/current-ticket-event";
+import { GateCamera } from "../components/gate-camera";
+import { PhotoModeration } from "../components/photo-moderation";
+import { POSShiftPanel } from "../components/pos-shift";
+import { POSCashupPanel } from "../components/pos-cashup";
+import { cashierTopupJournal, type CashTopupIntent } from "../lib/cashier-topup";
+import { cashierCardTopupJournal } from "../lib/cashier-card-topup";
+import { validateOpenShift, type ShiftLease } from "../lib/pos-shift";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../components/ui/alert-dialog";
 
 type AppUser = {
   id: number;
@@ -88,6 +101,7 @@ type AppMessage = {
   scope: string;
   body: string;
   created_at: number;
+  can_reply?: boolean;
 };
 type AppMessageContact = {
   type: string;
@@ -164,6 +178,7 @@ type AppPosDepartment = {
 };
 type AppPosConfig = {
   ok: boolean;
+  cashier_card_topup_enabled?: boolean;
   groups?: { id: number; event_id?: number | null; name: string; sort_order?: number }[];
   locations?: { id: number; event_id?: number | null; group_id: number; name: string; sort_order?: number; product_count?: number }[];
   departments: AppPosDepartment[];
@@ -187,12 +202,6 @@ type PosV1Customer = {
   customer_type?: "customer" | "wallet";
   wallet_id?: string | null;
   wallet_version?: number;
-};
-type PosV1Order = {
-  id: number;
-  order_code: string;
-  status: string;
-  total_cents: number;
 };
 type PublicProgrammeItem = {
   id: number;
@@ -584,7 +593,7 @@ const appModules: AppModule[] = [
     detail: "Hersien app-inskrywings, navrae en opvolgstatus",
     icon: ClipboardCheck,
     roles: ["staff", "committee"],
-    permissions: ["horses_entries", "horses_approve", "horses_programme"],
+    permissions: ["horses_entries", "horses_approve"],
     live: true,
     status: "live",
   },
@@ -594,9 +603,8 @@ const appModules: AppModule[] = [
     detail: "Publieke program, klasse en tye",
     icon: CalendarDays,
     roles: allViews,
-    href: "/perde",
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "venues",
@@ -1065,34 +1073,6 @@ const staffReviewScopes: Record<string, { scope: string; title: string; intro: s
     intro: "Hersien app-ingediende uitstaller-, span- en hekpasversoeke. Die formele vendor admin bly die bron van waarheid vir fakture en staanplekke.",
   },
 };
-
-async function api(path: string, init?: RequestInit) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 20000);
-  let response: Response;
-  const headers = new Headers(init?.headers || {});
-  if (!(init?.body instanceof FormData) && !headers.has("content-type")) headers.set("content-type", "application/json");
-  try {
-    response = await fetch(path, {
-      ...init,
-      credentials: "same-origin",
-      signal: init?.signal || controller.signal,
-      headers,
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") throw new Error("Die versoek het te lank geneem. Herlaai die blad en probeer weer.");
-    throw err;
-  } finally {
-    window.clearTimeout(timeout);
-  }
-  const data = await response.json().catch(() => ({ ok: false, error: "Die bediener het nie korrek geantwoord nie" }));
-  if (!response.ok || data?.ok === false) {
-    const message = data.error || data.reason || `Die bediener het HTTP ${response.status} teruggegee`;
-    const suffix = data.request_id ? ` Verwysing: ${data.request_id}` : "";
-    throw new Error(`${message}${suffix}`);
-  }
-  return data;
-}
 
 function Splash() {
   return (
@@ -1638,7 +1618,7 @@ function Dashboard({ data, message, health, onRefresh, onLogout }: { data: MeRes
   const healthIssues = healthChecks.filter((check) => check.status && check.status !== "ok");
   const healthStatus = health ? (!health.ok || healthIssues.some((check) => check.status === "fail") ? "fail" : healthIssues.length ? "warn" : "ok") : "checking";
   const healthSummary = healthStatus === "ok"
-    ? `${health.event?.ticket_types || 0} kaartjie-tipes · ${health.checks?.yoco_payments?.detail || "Yoco nagegaan"} · ${health.checks?.pos_config?.detail || "POS nagegaan"}`
+    ? `${health?.event?.ticket_types || 0} kaartjie-tipes · ${health?.checks?.yoco_payments?.detail || "Yoco nagegaan"} · ${health?.checks?.pos_config?.detail || "POS nagegaan"}`
     : healthStatus === "warn"
       ? `${healthIssues.length} waarskuwing${healthIssues.length === 1 ? "" : "s"} — maak status oop`
       : health
@@ -1674,8 +1654,10 @@ function Dashboard({ data, message, health, onRefresh, onLogout }: { data: MeRes
     if (page !== "home") navigatePage("home");
     setTab(next);
   };
+  const moduleOpen = Boolean(selected && canOpenModule(selected));
+  const fullscreen = page !== 'home' || tab !== 'home' || moduleOpen;
   return (
-    <main className="app-shell live-app-shell">
+    <main className={`app-shell live-app-shell${fullscreen ? ' module-fullscreen' : ''}`}>
       <header className="topbar">
         <div className="brand-lockup">
           <Image unoptimized src="/skou-crest.png" width={64} height={58} priority alt="Villiersdorp Landbou Skou" />
@@ -1690,7 +1672,11 @@ function Dashboard({ data, message, health, onRefresh, onLogout }: { data: MeRes
           <i className="notification-dot" />
         </button>
       </header>
-      <section className="viewport">
+      {fullscreen && !moduleOpen && <header className="module-toolbar">
+        <button className="module-return" aria-label="Terug na die app" onClick={() => navigatePage('home')}><ArrowLeft /></button>
+        <span>Villiersdorp Skou</span>
+      </header>}
+      <section className="viewport" inert={moduleOpen || undefined}>
         {page === "tickets" ? (
           <AppSubPage eyebrow="My kaartjies" title="Koop of wys kaartjies" icon={Ticket} onBack={() => navigatePage("home")}>
             <TicketsFlow user={user} tickets={tickets} pendingOrders={pendingTicketOrders} onRefresh={onRefresh} standalone />
@@ -1706,7 +1692,7 @@ function Dashboard({ data, message, health, onRefresh, onLogout }: { data: MeRes
         ) : page === "pos" ? (
           <AppSubPage eyebrow="POS & Toegang" title="Kies POS-afdeling" icon={ScanLine} onBack={() => navigatePage("home")}>
             {canOpenModule("pos") || canOpenModule("bar-pos") || canOpenModule("kitchen-pos") ? (
-              <PosLauncherPanel moduleKey="pos-menu" ModuleIcon={ScanLine} />
+              <PosLauncherPanel userId={user.id} moduleKey="pos-menu" ModuleIcon={ScanLine} />
             ) : (
               <WorkflowGroupPage group={allowedGroupByKey("pos-access")} onOpen={openModule} fallback="Jy het nog nie POS- of hektoegang op hierdie rekening nie." />
             )}
@@ -1783,9 +1769,8 @@ function Dashboard({ data, message, health, onRefresh, onLogout }: { data: MeRes
           <MessagesPanel user={user} />
         )}
         {tab === "calendar" && (
-          <SimplePanel title="Kalender" subtitle="Belangrike Skou-datums.">
-            <InfoRow icon={CalendarDays} title="Vrydag, 23 Oktober 2026" text="Skoudag 1" />
-            <InfoRow icon={CalendarDays} title="Saterdag, 24 Oktober 2026" text="Skoudag 2" />
+          <SimplePanel title="Kalender" subtitle="Die gepubliseerde program vir die aktiewe skou.">
+            <ProgrammePanel ModuleIcon={CalendarDays} />
           </SimplePanel>
         )}
         {tab === "profile" && (
@@ -2000,7 +1985,8 @@ function VenueBookingPage({ user }: { user: AppUser }) {
     setBusy(true);
     setError("");
     setMessage("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api("/api/app/venue-requests", {
         method: "POST",
@@ -2011,7 +1997,7 @@ function VenueBookingPage({ user }: { user: AppUser }) {
           contact_name: form.get("contact_name"), contact_phone: form.get("contact_phone"), details: form.get("details"),
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setMessage("Dankie. Jou terreinbesprekingsversoek is ontvang en sal deur die Skoukantoor opgevolg word.");
       await loadRequests();
     } catch (err) {
@@ -2075,7 +2061,20 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
   const [refundAmount, setRefundAmount] = useState<Record<number, string>>({});
   const [refundMethod, setRefundMethod] = useState<Record<number, string>>({});
   const [refundReason, setRefundReason] = useState<Record<number, string>>({});
-  const [refundKeys, setRefundKeys] = useState<Record<number, string>>({});
+  const [processingShifts,setProcessingShifts]=useState<{order_id:number;processing_shift_id:string;terminal_code:string;opened_at:number}[]>([]);
+  const [refundShift,setRefundShift]=useState<Record<number,string>>({});
+  const [pendingRefund, setPendingRefund] = useState<PendingRefund | null>(null);
+  const refundJournal = useMemo(() => createRefundJournal<{ refund?: BarRefund; transaction?: BarTransaction }>({
+    getItem: (key) => window.sessionStorage.getItem(key),
+    setItem: (key, value) => window.sessionStorage.setItem(key, value),
+    removeItem: (key) => window.sessionStorage.removeItem(key),
+  }, `${user.source}:${user.id}`, api), [user.source, user.id]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      try { setPendingRefund(refundJournal.pending()); }
+      catch (err) { setError(err instanceof Error ? err.message : "Refund herstel het misluk."); }
+    });
+  }, [refundJournal]);
 
   const loadTransactions = async () => {
     setLoading(true);
@@ -2084,6 +2083,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
       const result = await api("/api/app/bar/transactions?limit=15");
       setTransactions(result.transactions || []);
       setCanRefund(Boolean(result.can_refund));
+      setProcessingShifts(Array.isArray(result.processing_shifts)?result.processing_shifts:[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kroegtransaksies kon nie gelaai word nie");
     } finally {
@@ -2115,35 +2115,32 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
       setError("Hierdie transaksie het nie ’n kliëntbeursie gekoppel nie. Kies Yoco-kaart refund/opvolg, of koppel die kliënt se beursie eers.");
       return;
     }
-    const idempotencyKey = refundKeys[transaction.id] || crypto.randomUUID();
-    setRefundKeys((current) => ({ ...current, [transaction.id]: idempotencyKey }));
-    setBusyRefundId(transaction.id);
+    const selected=refundShift[transaction.id];
+    if(!selected||!processingShifts.some(s=>s.order_id===transaction.id&&s.processing_shift_id===selected)){
+      setError('Kies jou oop verwerkingskof vir hierdie ligging. Maak eers ’n skof oop onder Kroeg POS indien nodig.');return;
+    }
+    await runRefund(transaction.id, { amount_cents: amount, method, reason,processing_shift_id:selected });
+  };
+
+  const runRefund = async (orderId: number, draft: RefundDraft | null) => {
+    setBusyRefundId(orderId);
     setError("");
     setMessage("");
     try {
-      const result = await api(`/api/app/bar/transactions/${transaction.id}/refund`, {
-        method: "POST",
-        body: JSON.stringify({
-          amount_cents: amount,
-          method,
-          reason,
-          idempotency_key: idempotencyKey,
-        }),
-      });
+      const result = await refundJournal.run(orderId, draft);
       if (result.transaction) {
-        setTransactions((current) => current.map((row) => row.id === transaction.id ? result.transaction : row));
+        const updated = result.transaction;
+        setTransactions((current) => current.map((row) => row.id === orderId ? updated : row));
       }
       setActiveRefundId(null);
-      setRefundKeys((current) => {
-        const next = { ...current };
-        delete next[transaction.id];
-        return next;
-      });
-      setMessage(result.refund?.status === "pending_provider" ? "Refund is veilig aangeteken. Yoco het nog nie finaal bevestig nie; verfris transaksies oor ’n oomblik." : "Refund is voltooi en die transaksie is opgedateer.");
+      const outcome = refundOutcome(result.refund?.status);
+      if (outcome.failed) setError(outcome.message);
+      else setMessage(outcome.message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refund kon nie gestoor word nie");
     } finally {
       setBusyRefundId(null);
+      try { setPendingRefund(refundJournal.pending()); } catch { /* Keep the existing recovery error. */ }
     }
   };
 
@@ -2165,6 +2162,13 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
         {loading ? "Laai transaksies…" : "Verfris transaksies"} <RefreshCw className={loading ? "spin" : ""} />
       </button>
       {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+      {pendingRefund && canRefund && <article className="refund-panel">
+        <h3>Refund wag vir bevestiging</h3>
+        <p>Transaksie {pendingRefund.orderId} · R {(pendingRefund.draft.amount_cents / 100).toFixed(2)} · {pendingRefund.draft.method}</p>
+        <p>{pendingRefund.draft.reason}</p>
+        {pendingRefund.draft.processing_shift_id&&<p>Verwerkingskof: {pendingRefund.draft.processing_shift_id}</p>}
+        <button className="refund-submit" disabled={busyRefundId !== null} onClick={() => void runRefund(pendingRefund.orderId, null)}>Hervat oorspronklike refund</button>
+      </article>}
       {error && <p className="form-error">{error}</p>}
       {loading ? (
         <p className="loading-line"><RefreshCw className="spin" /> Laai kroegtransaksies…</p>
@@ -2211,6 +2215,13 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
                     </button>
                     {refundOpen && (
                       <div className="refund-panel">
+                        <label>Verwerkingskof
+                          <select value={refundShift[transaction.id]||''} disabled={busyRefundId!==null||Boolean(pendingRefund)} onChange={event=>setRefundShift(current=>({...current,[transaction.id]:event.target.value}))}>
+                            <option value="">Kies jou oop skof</option>
+                            {processingShifts.filter(s=>s.order_id===transaction.id).map(s=><option key={s.processing_shift_id} value={s.processing_shift_id}>{s.terminal_code} · {s.processing_shift_id}</option>)}
+                          </select>
+                        </label>
+                        {!processingShifts.some(s=>s.order_id===transaction.id)&&<p>Geen oop skof vir jou by hierdie ligging nie. Maak ’n skof oop onder Kroeg POS en herlaai die transaksies. ’n Vorige refund kan steeds hierbo hervat word.</p>}
                         <div className="refund-form-grid">
                           <label>Bedrag
                             <input value={refundAmount[transaction.id] ?? (transaction.refundable_cents / 100).toFixed(2)} inputMode="decimal" onChange={(event) => setRefundAmount((current) => ({ ...current, [transaction.id]: event.target.value }))} />
@@ -2227,7 +2238,7 @@ function BarTransactionsPage({ user }: { user: AppUser }) {
                         <label>Rede vir refund
                           <textarea value={refundReason[transaction.id] || ""} onChange={(event) => setRefundReason((current) => ({ ...current, [transaction.id]: event.target.value }))} placeholder="Byvoorbeeld: verkeerde item, duplikaat, kassier-fout" />
                         </label>
-                        <button className="refund-submit" disabled={busyRefundId === transaction.id} onClick={() => void submitRefund(transaction)}>
+                        <button className="refund-submit" disabled={busyRefundId!==null||Boolean(pendingRefund)||!refundShift[transaction.id]} onClick={() => void submitRefund(transaction)}>
                           {busyRefundId === transaction.id ? "Stoor refund…" : "Stoor refund"}
                         </button>
                       </div>
@@ -2251,12 +2262,13 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
   const isPosLauncher = ["pos", "bar-pos", "kitchen-pos", "gates"].includes(moduleKey);
   const staffReview = staffReviewScopes[moduleKey];
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <section className="detail-sheet live-sheet" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="sheet-handle" />
-        <button className="sheet-close" onClick={onClose} aria-label="Maak toe">
-          ×
-        </button>
+    <div className="sheet-backdrop module-screen-backdrop">
+      <section className="detail-sheet live-sheet module-screen" role="dialog" aria-modal="true" aria-label={moduleInfo?.title || 'Skou afdeling'} onKeyDown={event => { if(event.key === 'Escape') onClose(); }}>
+        <header className="module-toolbar">
+          <button className="module-return" onClick={onClose} aria-label="Maak toe" autoFocus><ArrowLeft /></button>
+          <span>{moduleInfo?.title || 'Villiersdorp Skou'}</span>
+        </header>
+        <div className="module-screen-content">
         {moduleKey === "tickets" ? (
           <TicketsFlow user={user} tickets={tickets} pendingOrders={pendingOrders} onRefresh={onRefresh} />
         ) : moduleKey === "family" ? (
@@ -2265,12 +2277,12 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
           <WalletFlow wallets={wallets} />
         ) : moduleKey === "photos" ? (
           <PhotosFlow />
-        ) : moduleKey === "programme" ? (
-          <ProgrammePanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
+        ) : moduleKey === "programme" || moduleKey === "horse-programme" ? (
+          <ProgrammePanel key={moduleKey} horseOnly={moduleKey === "horse-programme"} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : moduleKey === "map" ? (
           <ShowMapPanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : moduleKey === "wallet-topup" ? (
-          <PosWalletTopupPanel />
+          <PosWalletTopupPanel key={user.id} userId={user.id} />
         ) : requestModuleDetails[moduleKey] ? (
           <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
         ) : moduleKey === "horse-processing" && staffReview ? (
@@ -2278,21 +2290,23 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
         ) : staffReview ? (
           <StaffRequestReviewPanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} config={staffReview} />
         ) : isPosLauncher ? (
-          <PosLauncherPanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
+          <PosLauncherPanel userId={user.id} moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : (
           <ConnectedModulePanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         )}
+        </div>
       </section>
     </div>
   );
 }
 
-function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: string; moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userId: number; moduleKey: string; moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
   const [config, setConfig] = useState<AppPosConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [showWalletTopup, setShowWalletTopup] = useState(false);
+  const [showCashup,setShowCashup]=useState(false);
   const preferred = moduleKey === "bar-pos" ? "bar-pos" : moduleKey === "kitchen-pos" ? "kitchen-pos" : moduleKey === "gates" ? "gate-scanner" : "gate-pos";
   useEffect(() => {
     let active = true;
@@ -2335,7 +2349,8 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
   const liveKeys = new Set(scopedLiveOptions.map((option) => option.key));
   const fallbackAdditions = scopedFallbackOptions.filter((option) => !liveKeys.has(option.key));
   const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...fallbackAdditions] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
-  if (showWalletTopup) return <PosWalletTopupPanel onBack={() => setShowWalletTopup(false)} />;
+  if (showWalletTopup) return <PosWalletTopupPanel key={userId} userId={userId} onBack={() => setShowWalletTopup(false)} />;
+  if(showCashup)return <POSCashupPanel key={userId} userId={userId} onBack={()=>setShowCashup(false)}/>;
   if (selectedArea === "scan") return <InAppScannerPanel onBack={() => setSelectedArea(null)} />;
   const selectedDepartment = selectedArea ? ((config?.departments || []).find((department) => department.area === selectedArea) || {
     area: selectedArea,
@@ -2348,7 +2363,7 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
     primary_location_id: null,
     launch_url: null
   }) : null;
-  if (selectedDepartment) return <InAppPosPanel department={selectedDepartment} config={config} onBack={() => setSelectedArea(null)} />;
+  if (selectedDepartment) return <InAppPosPanel userId={userId} department={selectedDepartment} config={config} onBack={() => setSelectedArea(null)} />;
   return (
     <>
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
@@ -2362,6 +2377,7 @@ function PosLauncherPanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: st
       {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Die veilige standaard-skakels bly beskikbaar.</p>}
       {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}
       <div className="pos-launch-grid">
+        {moduleKey!=="gates"&&<button className="pos-launch-card" type="button" onClick={()=>setShowCashup(true)}><span>SKOF</span><strong>Kasafsluiting</strong><small>Kontroleer jou kasstaat, tel kontant en sluit jou skof af.</small><ArrowRight/></button>}
         {ordered.map((option) => (
           option.key === "wallet-topup" ? (
             <button className="pos-launch-card" type="button" key={option.key} onClick={() => setShowWalletTopup(true)}>
@@ -2457,7 +2473,8 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
     }
   }, []);
   useEffect(() => {
-    void loadScanner();
+    const timer = window.setTimeout(() => void loadScanner(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadScanner]);
   const scanReason = (scan: ScanResult | null) => {
     const reason = scan?.reason || scan?.error || "";
@@ -2519,6 +2536,7 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
       {message && <p className="success-note"><CheckCircle2 />{message}</p>}
       {error && <p className="form-error">{error}</p>}
       <form className="scanner-panel" onSubmit={processCode}>
+        <GateCamera disabled={Boolean(busy)} onCode={(value) => { setCode(value); setMessage("QR gelees. Kies die aksie om hierdie kaartjie te verwerk."); }} />
         <label>Hek
           <select value={gateId} onChange={(event) => setGateId(Number(event.target.value))}>
             {!gates.length && <option value="0">Geen hekke gelaai nie</option>}
@@ -2557,13 +2575,13 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
       )}
       <div className="handoff">
         <strong>Kamera scan</strong>
-        <p>Handmatige kode/QR verwerking werk nou binne die app. Kamera-leser is die volgende stap sodat die toestel se kamera die veld outomaties invul en dieselfde aksie uitvoer.</p>
+        <p>Kamera en handmatige kodes gebruik dieselfde kaartjiekontrole. Toegang word eers bevestig nadat die bediener die aksie goedkeur.</p>
       </div>
     </>
   );
 }
 
-function InAppPosPanel({ department, config, onBack }: { department: AppPosDepartment; config: AppPosConfig | null; onBack: () => void }) {
+function InAppPosPanel({ userId, department, config, onBack }: { userId: number; department: AppPosDepartment; config: AppPosConfig | null; onBack: () => void }) {
   const [liveConfig, setLiveConfig] = useState<AppPosConfig | null>(config);
   const [configLoading, setConfigLoading] = useState(!config?.locations?.length);
   const [locationId, setLocationId] = useState<number>(department.primary_location_id || 0);
@@ -2572,24 +2590,43 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
   const [customerQuery, setCustomerQuery] = useState("");
   const [customers, setCustomers] = useState<PosV1Customer[]>([]);
   const [customer, setCustomer] = useState<PosV1Customer | null>(null);
-  const [method, setMethod] = useState<"cash" | "yoco_manual" | "event_balance">("cash");
+  const [method, setMethod] = useState<"cash" | "yoco_manual" | "yoco_webpos" | "event_balance">("cash");
+  const [webposUrl, setWebposUrl] = useState<string | null>(null);
   const [reference, setReference] = useState("");
+  const [confirmedCardSale, setConfirmedCardSale] = useState<string | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [lease, setLease] = useState<{ terminal_code: string; device_instance_id: string; lease_token: string; expires_at?: number } | null>(null);
+  const [shiftReady, setShiftReady] = useState(false);
   const [orderCode, setOrderCode] = useState("");
+  const saleInFlight = useRef(false);
+  const [hasPendingSale, setHasPendingSale] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const checkout = useMemo(() => createCheckout({
+    getItem: (key) => window.sessionStorage.getItem(key),
+    setItem: (key, value) => window.sessionStorage.setItem(key, value),
+    removeItem: (key) => window.sessionStorage.removeItem(key),
+  }, `${userId}:${department.area}`, api), [userId, department.area]);
   useEffect(() => {
-    if (config?.locations?.length) {
-      setLiveConfig(config);
-      setConfigLoading(false);
-    }
+    const timer = window.setTimeout(() => {
+      try { const pending = checkout.pending(); setHasPendingSale(Boolean(pending)); setCancelReason(pending?.cancelReason || ""); }
+      catch (err) { setError(err instanceof Error ? err.message : "Verkoop kon nie herlaai word nie"); }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [checkout]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (config?.locations?.length) {
+        setLiveConfig(config);
+        setConfigLoading(false);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [config]);
   useEffect(() => {
     let active = true;
     if (liveConfig?.locations?.length) return () => { active = false; };
-    setConfigLoading(true);
-    setError("");
     void api("/api/app/pos/config")
       .then((result) => {
         if (active) setLiveConfig(result);
@@ -2618,7 +2655,9 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
   const basketLines = Object.entries(basket)
     .map(([id, qty]) => ({ product: products.find((product) => Number(product.id) === Number(id)), qty }))
     .filter((line): line is { product: PosV1Product; qty: number } => Boolean(line.product) && line.qty > 0);
-  const total = basketLines.reduce((sum, line) => sum + Number(line.product.effective_price_cents || line.product.price_cents || 0) * line.qty, 0);
+  const total = basketLines.reduce((sum, line) => sum + Number(line.product.effective_price_cents ?? line.product.price_cents ?? 0) * line.qty, 0);
+  const cardSaleIdentity = JSON.stringify({ basket, total, locationId, customer, reference, method });
+  const manualCardConfirmed = confirmedCardSale === cardSaleIdentity;
   const setQty = (product: PosV1Product, qty: number) => {
     setBasket((current) => {
       const next = { ...current };
@@ -2629,22 +2668,26 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
     });
   };
   const loadProducts = useCallback(async (id: number) => {
-    if (!id) return;
+    if (!id) return false;
     setBusy("products");
     setError("");
     try {
       const result = await api(`/api/pos-v1/products?location_id=${encodeURIComponent(id)}`);
       setProducts(result.products || []);
       setBasket({});
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Produkte kon nie gelaai word nie");
       setProducts([]);
+      return false;
     } finally {
       setBusy("");
     }
   }, []);
-  const prepareTerminal = useCallback(async (id: number) => {
-    if (!id || effectiveDepartment.status !== "live") return;
+  const prepareTerminal = useCallback(async (id: number, recoveryTerminal?: string) => {
+    if (!id || effectiveDepartment.status !== "live") return false;
+    setShiftReady(false);
+    setLease(null);
     setBusy("terminal");
     setError("");
     try {
@@ -2652,7 +2695,7 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
         method: "POST",
         body: JSON.stringify({ target: "pos", pos_area: effectiveDepartment.area, location_id: id }),
       });
-      const terminal_code = getAppPosTerminal(effectiveDepartment.area);
+      const terminal_code = recoveryTerminal || getAppPosTerminal(effectiveDepartment.area);
       const device_instance_id = getPosDeviceId();
       await api("/api/pos-v1/terminal/register", {
         method: "POST",
@@ -2670,19 +2713,55 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
         method: "POST",
         body: JSON.stringify({ terminal_code, device_instance_id, force: false }),
       });
-      setLease({ terminal_code, device_instance_id, lease_token: acquired.lease_token, expires_at: acquired.expires_at });
-      await loadProducts(id);
+      const loaded = await loadProducts(id);
+      setLease(loaded ? { terminal_code, device_instance_id, lease_token: acquired.lease_token, expires_at: acquired.expires_at } : null);
+      return loaded;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "POS kon nie binne die app voorberei word nie");
+      const raw = err instanceof Error ? err.message : "POS kon nie binne die app voorberei word nie";
+      setError(raw.startsWith("terminal_mapping_in_use_finish_sale_and_release")
+        ? "Hierdie terminaal is nog in gebruik of het ’n onafgehandelde verkoop. Voltooi die verkoop en stel die sessie vry voordat jy ligging verander."
+        : raw);
+      return false;
     } finally {
       setBusy("");
     }
   }, [effectiveDepartment.area, effectiveDepartment.status, effectiveDepartment.title, loadProducts]);
+  const changeLocation = async (id: number) => {
+    if (!id || id === locationId || saleInFlight.current || busy) return;
+    saleInFlight.current = true;
+    setBusy("terminal"); setError("");
+    try {
+      await changePOSLocation({
+        hasBasket: Object.values(basket).some(qty => qty > 0),
+        hasPendingSale: () => Boolean(checkout.pending()),
+        lease,
+        release: held => api("/api/pos-v1/terminal/lease/release", { method: "POST", body: JSON.stringify(held) }),
+        clearLease: () => setLease(null),
+        prepare: () => prepareTerminal(id),
+        select: () => { setLocationId(id); setConfirmedCardSale(null); },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ligging kon nie verander word nie");
+    } finally {
+      saleInFlight.current = false; setBusy("");
+    }
+  };
   useEffect(() => {
     if (configLoading) return;
-    const id = effectiveDepartment.primary_location_id || locations[0]?.id || 0;
-    setLocationId(Number(id || 0));
-    if (id) void prepareTerminal(Number(id));
+    const timer = window.setTimeout(() => {
+      try {
+        const context = initialPOSContext({
+          pending: checkout.pending(), locationIds: locations.map(item => Number(item.id)),
+          primaryLocationId: effectiveDepartment.primary_location_id, eventId: liveConfig?.event?.id,
+        });
+        setLocationId(context.locationId);
+        if (context.locationId) void prepareTerminal(context.locationId, context.terminalCode);
+      } catch (err) {
+        setLease(null);
+        setError(err instanceof Error ? err.message : "Die vorige verkoop kon nie herstel word nie. Kontak admin.");
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveDepartment.area, effectiveDepartment.primary_location_id, configLoading, locations.length]);
   const searchCustomers = async (event: FormEvent<HTMLFormElement>) => {
@@ -2699,66 +2778,72 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
       setBusy("");
     }
   };
-  const completeSale = async () => {
-    if (!currentLocation?.id || !lease || !basketLines.length) return;
-    if (method === "event_balance" && !customer?.wallet_id) {
+  const completeSale = async (resume = false) => {
+    if (saleInFlight.current || !currentLocation?.id || !lease || (!resume && (!basketLines.length || !shiftReady))) return;
+    if (!resume && method === "event_balance" && !customer?.wallet_id) {
       setError("Kies eers ’n beursie-kliënt voor jy met skoubeursie betaal.");
       return;
     }
-    if (method === "event_balance" && Number(customer?.balance_cents || 0) < total) {
+    if (!resume && method === "event_balance" && Number(customer?.balance_cents || 0) < total) {
       setError(`Beursiebalans onvoldoende. Balans: ${posMoney(Number(customer?.balance_cents || 0))}; totaal: ${posMoney(total)}.`);
       return;
     }
+    saleInFlight.current = true;
     setBusy("sale");
     setError("");
     setMessage("");
     try {
       const common = {
-        ...lease,
         event_id: liveConfig?.event?.id,
         group_id: currentLocation.group_id,
         location_id: currentLocation.id,
         terminal_code: lease.terminal_code,
       };
-      const orderResult = await api("/api/pos-v1/orders", {
-        method: "POST",
-        body: JSON.stringify({
+      const order = await checkout.run(resume ? null : {
           ...common,
           customer_id: customer?.id || null,
           customer_name: customer?.name || null,
           customer_mobile: customer?.mobile || null,
           wallet_id: customer?.wallet_id || null,
           items: basketLines.map((line) => ({ product_id: line.product.id, qty: line.qty })),
-          idempotency_key: `${lease.terminal_code}:app-order:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-        }),
-      });
-      const order: PosV1Order = orderResult.order;
-      await api(`/api/pos-v1/orders/${encodeURIComponent(order.id)}/pay`, {
-        method: "POST",
-        body: JSON.stringify({
-          ...common,
           method,
-          provider_reference: method === "yoco_manual" ? reference || `APP-YOCO-${order.order_code}` : reference || null,
-          idempotency_key: `${lease.terminal_code}:app-pay:${order.id}:${Date.now()}`,
-        }),
-      });
-      await api(`/api/pos-v1/orders/${encodeURIComponent(order.id)}/fulfil`, {
-        method: "POST",
-        body: JSON.stringify({ ...common, all_delivered: true }),
-      });
+          provider_reference: reference || null,
+          manual_card_confirmed: method === "yoco_manual" ? manualCardConfirmed : undefined,
+      }, lease);
       setOrderCode(order.order_code);
       setBasket({});
       setReference("");
+      setConfirmedCardSale(null);
+      setWebposUrl(null);
       setMessage(`${department.title} verkoop voltooi: ${order.order_code} · ${posMoney(order.total_cents || total)}.`);
       if (method === "event_balance" && customer?.wallet_id) {
         const refreshed = await api(`/api/wallets/${encodeURIComponent(customer.wallet_id)}`).catch(() => null);
         if (refreshed?.wallet) setCustomer((current) => current ? { ...current, balance_cents: refreshed.wallet.balance_cents } : current);
       }
     } catch (err) {
+      if (err instanceof PendingWebPOS) setWebposUrl(err.redirectUrl);
       const raw = err instanceof Error ? err.message : "Verkoop kon nie voltooi word nie";
       setError(raw === "insufficient_balance" ? "Beursiebalans onvoldoende. Die sale is nie voltooi nie." : raw);
     } finally {
+      try { setHasPendingSale(Boolean(checkout.pending())); } catch { setHasPendingSale(true); }
+      saleInFlight.current = false;
       setBusy("");
+    }
+  };
+  const cancelPendingSale = async () => {
+    if (saleInFlight.current || !lease) return;
+    saleInFlight.current = true;
+    setBusy("cancel-sale"); setError(""); setMessage("");
+    try {
+      const order = await checkout.cancel(cancelReason, lease);
+      setBasket({}); setReference(""); setCancelReason("");
+      setWebposUrl(null);
+      setMessage(`Onbetaalde verkoop ${order.order_code} gekanselleer.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kansellasie kon nie bevestig word nie. Probeer weer.");
+    } finally {
+      try { setHasPendingSale(Boolean(checkout.pending())); } catch { setHasPendingSale(true); }
+      saleInFlight.current = false; setBusy("");
     }
   };
   const groupedProducts = products.reduce<Record<string, PosV1Product[]>>((groups, product) => {
@@ -2779,15 +2864,30 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
       {configLoading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-liggings…</p>}
       {locations.length > 1 && (
         <label className="pos-location-select">Ligging
-          <select value={locationId} onChange={(event) => { const id = Number(event.target.value); setLocationId(id); void prepareTerminal(id); }}>
+          <select value={locationId} disabled={Boolean(busy)} onChange={(event) => void changeLocation(Number(event.target.value))}>
             {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
           </select>
         </label>
       )}
       {busy === "terminal" || busy === "products" ? <p className="loading-line"><RefreshCw className="spin" /> Laai {effectiveDepartment.title}…</p> : null}
       {lease && <p className="provider-note">Terminal: {lease.terminal_code} · alles bly binne die app.</p>}
+      {lease && currentLocation && liveConfig?.event?.id && <POSShiftPanel
+        key={`${userId}:${liveConfig.event.id}:${currentLocation.id}:${lease.terminal_code}:${lease.lease_token}`}
+        userId={userId} context={{terminal_code:lease.terminal_code,location_id:currentLocation.id,event_id:liveConfig.event.id}}
+        lease={lease} disabled={Boolean(busy)} onReady={setShiftReady}
+      />}
       {error && <p className="form-error">{error}</p>}
       {message && <p className="success-note"><CheckCircle2 />{message}</p>}
+      {hasPendingSale && <section className="provider-note">
+        <p>Daar is ’n verkoop wat nog bevestig moet word. Hervat dit voordat jy ’n nuwe verkoop begin.</p>
+        <button type="button" className="app-primary" disabled={!lease || Boolean(busy)} onClick={() => void completeSale(true)}>Kontroleer betaling / hervat verkoop</button>
+        {webposUrl && <iframe title="Yoco-kaartbetaling" src={webposUrl} sandbox="allow-scripts allow-forms allow-same-origin" referrerPolicy="no-referrer" style={{ width: "100%", minHeight: "520px", border: 0 }} />}
+        <p>Kanselleer slegs indien geen betaling ontvang is nie. Reeds betaalde verkope benodig ’n terugbetaling.</p>
+        <label>Rede vir kansellasie
+          <input value={cancelReason} maxLength={500} disabled={Boolean(busy)} onChange={(event) => setCancelReason(event.target.value)} placeholder="Bv. kliënt wil nie voortgaan nie" />
+        </label>
+        <button type="button" className="sheet-secondary" disabled={!lease || Boolean(busy) || !cancelReason.trim()} onClick={() => void cancelPendingSale()}>Kanselleer onbetaalde verkoop</button>
+      </section>}
       {!configLoading && !currentLocation && <EmptyState icon={<Store />} title="Geen POS-ligging gevind nie" text="Koppel eers ’n location en produkte vir hierdie afdeling in admin." />}
       {currentLocation && (
         <div className="app-pos-layout">
@@ -2801,7 +2901,7 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
             </div>
             {basketLines.length ? basketLines.map((line) => (
               <div className="app-pos-basket-line" key={line.product.id}>
-                <div><strong>{line.product.name}</strong><small>{posMoney(Number(line.product.effective_price_cents || line.product.price_cents || 0))} elk</small></div>
+                <div><strong>{line.product.name}</strong><small>{posMoney(Number(line.product.effective_price_cents ?? line.product.price_cents ?? 0))} elk</small></div>
                 <div className="quantity-control">
                   <button type="button" onClick={() => setQty(line.product, line.qty - 1)}>−</button>
                   <b>{line.qty}</b>
@@ -2827,14 +2927,23 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
             )}
             <div className="amount-options payment-method-options">
               <button type="button" className={method === "cash" ? "active" : ""} onClick={() => setMethod("cash")}>Kontant</button>
-              <button type="button" className={method === "yoco_manual" ? "active" : ""} onClick={() => setMethod("yoco_manual")}>Yoco kaart</button>
+              <button type="button" className={method === "yoco_webpos" ? "active" : ""} onClick={() => setMethod("yoco_webpos")}>Yoco · betaal hier</button>
+              <button type="button" className={method === "yoco_manual" ? "active" : ""} onClick={() => setMethod("yoco_manual")}>Yoco kaart · handmatig</button>
               <button type="button" className={method === "event_balance" ? "active" : ""} onClick={() => setMethod("event_balance")}>Beursie</button>
             </div>
-            {method === "yoco_manual" && <label>Yoco verwysing / nota
-              <input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Opsioneel, bv. strokie of terminal ref" />
-            </label>}
+            {method === "yoco_manual" && <div className="provider-note">
+              <p>Neem die betaling van {posMoney(total)} op die Yoco-toestel. Hierdie opsie teken dit net aan; die app begin of verifieer nie die kaartbetaling nie. Moenie weer hef indien die uitkoms onseker is nie.</p>
+              <label>Yoco-transaksieverwysing (verpligtend)
+                <input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Verwysing op die suksesvolle transaksie" />
+              </label>
+              <label>
+                <input type="checkbox" checked={manualCardConfirmed} onChange={(event) => setConfirmedCardSale(event.target.checked ? cardSaleIdentity : null)} />
+                Ek het bevestig dat {posMoney(total)} suksesvol op die Yoco-toestel betaal is.
+              </label>
+            </div>}
             {method === "event_balance" && <p className="payment-note">Die backend keer die sale indien die beursie nie genoeg balans het nie.</p>}
-            <button className="app-primary" type="button" disabled={!lease || !basketLines.length || busy === "sale"} onClick={() => void completeSale()}>
+            {method === "yoco_webpos" && <p className="payment-note">Vereis ’n gekoppelde Yoco Web POS-toestel. Die verkoop voltooi eers nadat Yoco die betaling deur die backend bevestig het.</p>}
+            <button className="app-primary" type="button" disabled={!lease || !shiftReady || !basketLines.length || Boolean(busy) || hasPendingSale || (method === "yoco_manual" && (!manualCardConfirmed || !reference.trim()))} onClick={() => void completeSale()}>
               {busy === "sale" ? <RefreshCw className="spin" /> : <ShieldCheck />}
               {busy === "sale" ? "Voltooi…" : `Voltooi sale · ${posMoney(total)}`}
             </button>
@@ -2850,7 +2959,7 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
                     return (
                       <button className={`app-pos-product ${qty ? "selected" : ""}`} type="button" key={product.id} disabled={Boolean(product.sold_out)} onClick={() => setQty(product, qty + 1)}>
                         <strong>{product.name}</strong>
-                        <small>{posMoney(Number(product.effective_price_cents || product.price_cents || 0))}</small>
+                        <small>{posMoney(Number(product.effective_price_cents ?? product.price_cents ?? 0))}</small>
                         {qty ? <span>{qty}</span> : null}
                       </button>
                     );
@@ -2866,7 +2975,7 @@ function InAppPosPanel({ department, config, onBack }: { department: AppPosDepar
   );
 }
 
-function ProgrammePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+function ProgrammePanel({ moduleInfo, ModuleIcon, horseOnly = false }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon; horseOnly?: boolean }) {
   const [programme, setProgramme] = useState<PublicProgrammeItem[]>([]);
   const [horses, setHorses] = useState<PublicHorseProgrammeItem[]>([]);
   const [eventName, setEventName] = useState("");
@@ -2875,13 +2984,17 @@ function ProgrammePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; Mo
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setProgramme([]);
+    setHorses([]);
+    setEventName("");
     try {
       const health = await api("/api/app/health");
       const eventId = Number(health?.event?.id || 0);
+      if (!Number.isSafeInteger(eventId) || eventId < 1) throw new Error("Geen aktiewe skou gevind nie. Kontak admin vir hulp.");
       setEventName(String(health?.event?.name || ""));
-      const suffix = eventId ? `?event_id=${encodeURIComponent(eventId)}` : "";
+      const suffix = `?event_id=${encodeURIComponent(eventId)}`;
       const [programmeResult, horseResult] = await Promise.all([
-        api(`/api/public/programme${suffix}`),
+        horseOnly ? Promise.resolve({ items: [] }) : api(`/api/public/programme${suffix}`),
         api(`/api/public/horse-show${suffix}`),
       ]);
       setProgramme(programmeResult.items || []);
@@ -2891,9 +3004,10 @@ function ProgrammePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; Mo
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [horseOnly]);
   useEffect(() => {
-    void load();
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
   const grouped = new Map<string, Array<{ key: string; title: string; meta: string; notes: string; image?: string | null }>>();
   for (const item of programme) {
@@ -2920,12 +3034,15 @@ function ProgrammePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; Mo
   return (
     <>
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
-      <p className="eyebrow">Skouprogram</p>
+      <p className="eyebrow">{horseOnly ? "Perdeprogram" : "Skouprogram"}</p>
       <h2>{moduleInfo?.title || "Program, kunstenaars en perde"}</h2>
-      <p className="request-intro">Hierdie skerm lees die live kunstenaars-, program- en perdeprogram data vanaf dieselfde backend as die website, maar bly binne die app.</p>
+      <p className="request-intro">{horseOnly ? "Gepubliseerde perdeklasse, tye en arenas vir die gekose skou." : "Gepubliseerde kunstenaars, tye en perdeprogram vir die gekose skou."}</p>
       {eventName && <p className="provider-note">Gekoppel aan: {eventName}</p>}
       {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai program…</p>}
-      {error && <p className="form-error">{error}</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <button className="secondary-button" type="button" disabled={loading} onClick={() => void load()}>
+        <RefreshCw aria-hidden="true" /> {error ? "Probeer weer" : "Herlaai program"}
+      </button>
       {!loading && !error && grouped.size === 0 && (
         <EmptyState icon={<CalendarDays />} title="Program kom binnekort" text="Geen gepubliseerde kunstenaars- of perdeprogramitems is tans beskikbaar nie. Kontak admin indien dit reeds gepubliseer moes wees." />
       )}
@@ -2977,7 +3094,8 @@ function ShowMapPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; Modu
     }
   }, []);
   useEffect(() => {
-    void load();
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
   return (
     <>
@@ -3066,6 +3184,11 @@ function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey
 
 function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
   const [applications, setApplications] = useState<HorseBackendApplication[]>([]);
+  const [canApprove, setCanApprove] = useState(false);
+  const [review, setReview] = useState<{application: HorseBackendApplication; action: "approve" | "decline"} | null>(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const reviewInFlight = useRef(false);
+  const [reviewNotice, setReviewNotice] = useState("");
   const [eventName, setEventName] = useState("");
   const [settings, setSettings] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
@@ -3073,11 +3196,14 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
   const [warning, setWarning] = useState("");
   const load = useCallback(async () => {
     setLoading(true);
+    setCanApprove(false);
+    setReview(null);
     setError("");
     setWarning("");
     try {
       const result = await api("/api/app/staff/horse-applications?limit=50");
       setApplications(result.applications || []);
+      setCanApprove(result.can_approve === true);
       setEventName(result.event?.name || "");
       setSettings(result.settings || {});
       setWarning(result.warning || "");
@@ -3087,6 +3213,33 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
       setLoading(false);
     }
   }, []);
+  const submitReview = async () => {
+    if (!review || !canApprove || reviewInFlight.current) return;
+    reviewInFlight.current = true;
+    setReviewBusy(true);
+    setReviewNotice("");
+    const {application,action} = review;
+    try {
+      const result = await api(`/api/app/staff/horse-applications/${application.id}/${action}`, {
+        method: "POST", body: JSON.stringify({event_id: application.event_id}),
+      });
+      if (result.ok !== true) throw new Error("Die verwerking kon nie bevestig word nie.");
+      const delivery = result.notifications;
+      const needsDeliveryReview = action === "approve" && (delivery?.needs_review || delivery?.skipped ||
+        (!delivery?.email?.ok && !delivery?.whatsapp?.ok));
+      setReviewNotice(action === "decline" ? "Aansoek afgekeur." :
+        needsDeliveryReview ? "Aansoek goedgekeur. Kontak admin om die uitnodiging se aflewering na te gaan." : "Aansoek goedgekeur; uitnodiging gestuur.");
+      setReview(null);
+      await load();
+    } catch {
+      setCanApprove(false);
+      setReview(null);
+      setReviewNotice("Die uitslag kon nie bevestig word nie. Herlaai die aansoeke om die huidige status te sien voordat jy weer probeer. Kontak admin indien dit onseker bly.");
+    } finally {
+      reviewInFlight.current = false;
+      setReviewBusy(false);
+    }
+  };
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
@@ -3099,21 +3252,17 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
       <p className="eyebrow">Perde</p>
       <h2>Verwerk perde-aansoeke</h2>
-      <p className="request-intro">Hierdie lys kom direk van die bestaande perde-backend af. Goedkeuring, fakture, klasse en deposito’s bly vir nou op die bestaande perde-admin sodat ons nie werkende verwerking dupliseer nie.</p>
-      {moduleInfo?.href && (
-        <a className="sheet-primary-link module-launch secondary-launch" href={moduleInfo.href}>
-          Maak bestaande perde-admin oop <ArrowRight />
-        </a>
-      )}
+      <p className="request-intro">Hierdie lys wys die bestaande skou se perde-aansoeke. Gemagtigde personeel kan nuwe aansoeke goedkeur of afkeur. Fakture, klasse en deposito-aksies binne die app kom binnekort; kontak admin vir hulp daarmee.</p>
       {eventName && <p className="provider-note">Gekoppel aan: {eventName}</p>}
       {typeof settings.is_open !== "undefined" && (
         <p className="provider-note">Aansoeke is tans {Number(settings.is_open) ? "oop" : "gesluit"}{settings.closing_date ? ` · sluit ${String(settings.closing_date)}` : ""}</p>
       )}
       {warning && <p className="provider-note">{warning}</p>}
+      {reviewNotice && <p className="provider-note" role="status">{reviewNotice}</p>}
       {error && <p className="form-error">{error}</p>}
       {loading ? (
         <p className="loading-line"><RefreshCw className="spin" /> Laai bestaande perde-aansoeke…</p>
-      ) : applications.length ? (
+      ) : error ? null : applications.length ? (
         <section className="staff-review-list">
           {applications.map((application) => (
             <article key={application.id} className="staff-review-card">
@@ -3126,6 +3275,22 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
                 <span data-status={application.status}>{serviceStatusLabel(application.status)}</span>
               </div>
               {application.notes && <p className="staff-review-detail">{application.notes}</p>}
+              {canApprove && application.status === "new" && !application.exhibitor_id && (
+                <div>
+                  {review?.application.id === application.id ? (
+                    <section aria-label="Bevestig perde-aksie">
+                      <p>{review.action === "approve" ? "Keur hierdie aansoek goed en stuur die uitstalleruitnodiging?" : "Keur hierdie aansoek af? Dit kanselleer nie bestaande inskrywings of fakture nie."}</p>
+                      <button className="sheet-primary" disabled={reviewBusy} onClick={() => void submitReview()}>{reviewBusy ? "Besig om te verwerk…" : "Bevestig"}</button>
+                      <button className="sheet-secondary" disabled={reviewBusy} onClick={() => setReview(null)}>Terug</button>
+                    </section>
+                  ) : (
+                    <div>
+                      <button className="sheet-primary" disabled={reviewBusy} onClick={() => setReview({application,action:"approve"})}>Keur goed</button>
+                      <button className="sheet-secondary" disabled={reviewBusy} onClick={() => setReview({application,action:"decline"})}>Keur af</button>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="module-status-grid">
                 <section>
                   <strong>Faktuur</strong>
@@ -3148,9 +3313,9 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
           ))}
         </section>
       ) : (
-        <EmptyState icon={ModuleIcon ? <ModuleIcon /> : <ClipboardCheck />} title="Geen perde-aansoeke gevind nie" text="Daar is tans geen bestaande perde-aansoeke vir die aktiewe skou nie, of jou gebruiker het nie die nodige perde-regte nie." />
+        <EmptyState icon={ModuleIcon ? <ModuleIcon /> : <ClipboardCheck />} title="Geen perde-aansoeke gevind nie" text="Daar is tans geen bestaande perde-aansoeke vir die aktiewe skou nie." />
       )}
-      <button className="sheet-secondary" onClick={() => void load()} disabled={loading}>
+      <button className="sheet-secondary" onClick={() => void load()} disabled={loading || reviewBusy}>
         <RefreshCw className={loading ? "spin" : ""} /> Herlaai perde-aansoeke
       </button>
     </>
@@ -3314,7 +3479,8 @@ function ServiceRequestFlow({ moduleKey, user, moduleInfo, config }: { moduleKey
     setBusy(true);
     setError("");
     setMessage("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const payload: Record<string, FormDataEntryValue | null> = {};
     config.fields.forEach((field) => {
       payload[field.key] = form.get(field.key);
@@ -3334,7 +3500,7 @@ function ServiceRequestFlow({ moduleKey, user, moduleInfo, config }: { moduleKey
           payload,
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setMessage("Dankie. Jou versoek is ontvang en sal deur die regte afdeling opgevolg word.");
       await load();
     } catch (err) {
@@ -3602,7 +3768,14 @@ function TicketPurchase({ user }: { user: AppUser }) {
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    void api("/api/public/events/villiersdorp-skou-2026")
+    void currentTicketEvent(api)
+      .then(async (current) => {
+        const result = await api(`/api/public/events/${encodeURIComponent(current.slug)}`);
+        if (Number(result.event?.id) !== current.id || result.event?.status !== "active") {
+          throw new Error("Die skou het verander. Herlaai die kaartjieblad en probeer weer.");
+        }
+        return result;
+      })
       .then((result) => {
         if (!active) return;
         setEvent(result.event || null);
@@ -3656,7 +3829,7 @@ function TicketPurchase({ user }: { user: AppUser }) {
   if (!event && !error) return <p className="loading-line"><RefreshCw className="spin" /> Laai kaartjies…</p>;
   return (
     <section className="purchase-panel">
-      <div className="purchase-heading"><strong>{event?.name || "Villiersdorp Skou 2026"}</strong><span>{count} kaartjie(s)</span></div>
+      <div className="purchase-heading"><strong>{event?.name || "Villiersdorp Skou"}</strong><span>{count} kaartjie(s)</span></div>
       {event?.sales_closed ? <p className="form-error">Aanlyn kaartjieverkope is gesluit.</p> : (
         <div className="ticket-catalogue">
           {types.map((type) => {
@@ -3747,7 +3920,20 @@ function WalletFlow({ wallets }: { wallets: AppWallet[] }) {
   );
 }
 
-function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
+function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () => void }) {
+  const [config,setConfig]=useState<AppPosConfig|null>(null);
+  const [locationId,setLocationId]=useState(0);
+  const [lease,setLease]=useState<ShiftLease|null>(null);
+  const [shiftReady,setShiftReady]=useState(false);
+  const [pending,setPending]=useState<CashTopupIntent|null>(null);
+  const [restored,setRestored]=useState(false);
+  const inFlight=useRef(false),mounted=useRef(true);
+  const journal=useMemo(()=>cashierTopupJournal({getItem:k=>window.sessionStorage.getItem(k),setItem:(k,v)=>window.sessionStorage.setItem(k,v),removeItem:k=>window.sessionStorage.removeItem(k)},userId,api),[userId]);
+  const cardJournal=useMemo(()=>cashierCardTopupJournal({getItem:k=>window.localStorage.getItem(k),setItem:(k,v)=>window.localStorage.setItem(k,v),removeItem:k=>window.localStorage.removeItem(k)},userId,api),[userId]);
+  const [cardPending,setCardPending]=useState<ReturnType<typeof cardJournal.pending>>(null);
+  const [cardRedirect,setCardRedirect]=useState<string|null>(null);
+  const [recoveryId,setRecoveryId]=useState('');
+  const [cardCancelReason,setCardCancelReason]=useState('');
   const [query, setQuery] = useState("");
   const [wallet, setWallet] = useState<AppWallet | null>(null);
   const [newName, setNewName] = useState("");
@@ -3758,8 +3944,44 @@ function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  useEffect(()=>{
+    mounted.current=true;
+    void (async()=>{try{
+      const saved=journal.pending();
+      const savedCard=cardJournal.pending();
+      if(mounted.current)setCardCancelReason(savedCard?.cancel_reason||'');
+      const result=await api('/api/app/pos/config');
+      if(!mounted.current)return;
+      setConfig(result);setPending(saved);setCardPending(savedCard);setRecoveryId(savedCard?.recovery_payment_id||'');setLocationId(saved?.location_id||savedCard?.intent.location_id||result.locations?.[0]?.id||0);setRestored(true);
+    }catch(err){if(mounted.current)setError(err instanceof Error?err.message:'POS kon nie herlaai word nie.');}})();
+    return()=>{mounted.current=false;};
+  },[journal,cardJournal]);
+  const prepare=async()=>{
+    if(inFlight.current||cardPending||!restored||!config?.event?.id||!locationId)return;
+    inFlight.current=true;setBusy('terminal');setError('');setShiftReady(false);
+    try{
+      if(pending&&pending.event_id!==config.event.id)throw new Error('Die hangende aanvulling behoort aan ’n ander skou. Kontak admin om dit te bevestig.');
+      const loc=config.locations?.find(l=>l.id===locationId);
+      const group=config.groups?.find(g=>g.id===loc?.group_id);
+      const label=`${group?.name||''} ${loc?.name||''}`.toLowerCase();
+      const area=/bar|kroeg/.test(label)?'kroeg':/kitchen|kombuis|kos/.test(label)?'kombuis':'hek';
+      await api('/api/app/pos/bridge',{method:'POST',body:JSON.stringify({target:'pos',pos_area:area,location_id:locationId})});
+      const terminal_code=pending?.terminal_code||getAppPosTerminal(area),device_instance_id=getPosDeviceId();
+      await api('/api/pos-v1/terminal/register',{method:'POST',body:JSON.stringify({terminal_code,location_id:locationId,event_id:config.event.id,mode:area,platform:'pwa',device_name:'Skou App beursie'})});
+      const acquired=await api('/api/pos-v1/terminal/lease/acquire',{method:'POST',body:JSON.stringify({terminal_code,device_instance_id,force:false})});
+      if(mounted.current)setLease({terminal_code,device_instance_id,lease_token:acquired.lease_token});
+    }catch(err){if(mounted.current)setError(err instanceof Error?err.message:'Terminale verbinding het misluk.');}
+    finally{inFlight.current=false;if(mounted.current)setBusy('');}
+  };
+  useEffect(()=>{
+    if(!lease)return;
+    let active=true;
+    const timer=window.setInterval(()=>{void api('/api/pos-v1/terminal/lease/heartbeat',{method:'POST',body:JSON.stringify(lease)}).catch(()=>{if(active){setLease(null);setShiftReady(false);setError('Terminale verbinding verloor. Herstel dit voordat jy voortgaan.');}})},25000);
+    return()=>{active=false;window.clearInterval(timer);};
+  },[lease]);
   const lookup = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
+    if(inFlight.current||busy||pending||cardPending||!restored)return;
     if (!query.trim()) return;
     setBusy("lookup");
     setError("");
@@ -3776,6 +3998,7 @@ function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
   };
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if(inFlight.current||busy||pending||cardPending||!restored)return;
     setBusy("create");
     setError("");
     setMessage("");
@@ -3796,23 +4019,70 @@ function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
     }
   };
   const topup = async () => {
-    if (!wallet?.id) return;
+    if(inFlight.current||busy||cardJournal.pending()||!lease||!config?.event?.id||(!pending&&(!wallet?.id||!shiftReady)))return;
+    inFlight.current=true;
     setBusy("topup");
     setError("");
     setMessage("");
     try {
-      const result = await api("/api/app/staff/wallets/topup", {
-        method: "POST",
-        body: JSON.stringify({ wallet_id: wallet.id, amount_cents: amount, method, note }),
-      });
-      setWallet(result.wallet);
+      if(method!=='cash'&&!pending)throw new Error('Kaartaanvulling word nog aan bevestigde Yoco-betalings gekoppel. Geen krediet is toegepas nie.');
+      const context={terminal_code:lease.terminal_code,location_id:locationId,event_id:config.event.id};
+      if(!journal.pending()){
+        const current=await api('/api/pos-v1/shifts/current',{method:'POST',body:JSON.stringify({...context,...lease})});
+        const shift=validateOpenShift(current.shift,userId,context);
+        journal.prepare({...context,shift_id:shift.id,wallet_id:wallet!.id,amount_cents:amount,method:'cash',note});
+      }
+      setPending(journal.pending());
+      const receipt=await journal.submit(lease);
+      if(!mounted.current)return;
+      setPending(null);setWallet(null);
       setNote("");
-      setMessage(`${method === "cash" ? "Kontant" : "Kaart"} topup van R ${(amount / 100).toFixed(2)} is gestoor.`);
+      setMessage(`Kontantaanvulling van R ${(receipt.amount_cents/100).toFixed(2)} is bevestig. Verwysing: ${receipt.id}. Laai die beursie weer vir die huidige balans.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Topup kon nie gestoor word nie");
     } finally {
+      inFlight.current=false;
       setBusy("");
     }
+  };
+  const cancelCardTopup=async()=>{
+    if(inFlight.current||busy||!restored)return;
+    inFlight.current=true;setBusy('card-cancel');setError('');setMessage('');setCardRedirect(null);
+    try{
+      if(!cardJournal.pending()?.cancel_reason)cardJournal.prepareCancellation(cardCancelReason);
+      setCardPending(cardJournal.pending());
+      const result=await cardJournal.cancel();
+      if(!mounted.current)return;
+      setCardPending(cardJournal.pending());
+      if(result.terminal){setWallet(null);setCardCancelReason('');setRecoveryId('');setMessage(result.status==='paid'?'Die betaling was reeds bevestig. Dit is nie gekanselleer nie.':'Die ongestuurde kaartaanvulling is gekanselleer. Geen betaling is geneem nie.');}
+      else{setCardCancelReason('');setMessage('Die betaling is reeds na Yoco gestuur en kan nie hier gekanselleer word nie. Kontroleer / hervat die oorspronklike kaartbetaling; moenie weer betaal nie.');}
+    }catch(err){if(mounted.current)setError(err instanceof Error?err.message:'Kansellasie kon nie bevestig word nie.');}
+    finally{inFlight.current=false;if(mounted.current)setBusy('');}
+  };
+  const cardTopup=async(recover=false)=>{
+    if(inFlight.current||busy||!restored||journal.pending())return;
+    inFlight.current=true;setBusy('card');setError('');setMessage('');setCardRedirect(null);
+    try{
+      if(!cardJournal.pending()){
+        if(!config?.cashier_card_topup_enabled||!lease||!shiftReady||!wallet?.id||!config.event?.id)throw new Error('Verbind eers ’n oop kassierskof en laai die beursie.');
+        const context={terminal_code:lease.terminal_code,location_id:locationId,event_id:config.event.id};
+        const current=await api('/api/pos-v1/shifts/current',{method:'POST',body:JSON.stringify({...context,...lease})});
+        const shift=validateOpenShift(current.shift,userId,context);
+        cardJournal.prepare({...context,shift_id:shift.id,wallet_id:wallet.id,amount_cents:amount,method:'card',note});
+      }
+      if(recover)cardJournal.recover(recoveryId.trim());
+      setCardPending(cardJournal.pending());
+      // Existing intents can be reconciled after their original shift stops.
+      // Never acquire a different terminal or create a new intent to resume them.
+      const original=cardJournal.pending()!;
+      const result=await cardJournal.submit(lease?.terminal_code===original.intent.terminal_code?lease:undefined);
+      if(!mounted.current)return;
+      if(result.terminal){
+        setCardPending(null);setWallet(null);setRecoveryId('');setNote('');
+        setMessage(result.topup.status==='paid'?`Kaartaanvulling van R ${(result.topup.amount_cents/100).toFixed(2)} is bevestig. Verwysing: ${result.topup.id}.`:'Kaartbetaling is nie voltooi nie. Geen beursiekrediet is toegepas nie.');
+      }else{setCardPending(cardJournal.pending());setCardRedirect(result.redirect_url);setMessage('Betaling wag op bevestiging. Moenie ’n tweede betaling begin nie.');}
+    }catch(err){if(mounted.current){setCardPending(cardJournal.pending());setError(err instanceof Error?err.message:'Kaartbetaling kon nie bevestig word nie.');}}
+    finally{inFlight.current=false;if(mounted.current)setBusy('');}
   };
   return (
     <>
@@ -3824,6 +4094,28 @@ function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
       <span className="detail-icon"><WalletCards /></span>
       <p className="eyebrow">POS beursie</p>
       <h2>Beursie aanvulling</h2>
+      <section className="topup-panel">
+        <label>Kassierligging<select value={locationId} disabled={Boolean(lease)||Boolean(busy)||Boolean(pending)||Boolean(cardPending)||!restored} onChange={e=>setLocationId(Number(e.target.value))}>
+          <option value={0}>Kies ligging</option>{config?.locations?.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+        </select></label>
+        <button className="app-secondary" disabled={!restored||!locationId||Boolean(busy)||Boolean(lease)||Boolean(cardPending)} onClick={()=>void prepare()}>Herstel / verbind kassierterminaal</button>
+      </section>
+      {lease&&config?.event?.id&&<POSShiftPanel userId={userId} context={{terminal_code:lease.terminal_code,location_id:locationId,event_id:config.event.id}} lease={lease} disabled={Boolean(busy)||Boolean(pending)||Boolean(cardPending)} onReady={setShiftReady}/>}
+      {pending&&<section className="provider-note"><strong>Aanvulling wag op bevestiging</strong><p>Beursie {pending.wallet_id} · R {(pending.amount_cents/100).toFixed(2)}. Moenie weer kontant aanvaar nie.</p><button className="app-primary" disabled={!lease||Boolean(busy)} onClick={()=>void topup()}>Hervat dieselfde aanvulling</button></section>}
+      {cardPending&&<section className="topup-panel" aria-label="Hangende kaartaanvulling">
+        <strong>Kaartaanvulling wag op bevestiging</strong>
+        <p>Beursie {cardPending.intent.wallet_id} · R {(cardPending.intent.amount_cents/100).toFixed(2)}. Moenie weer betaal nie.</p>
+        <button className="app-primary" disabled={Boolean(busy)||!!pending||!!cardPending.cancel_reason} onClick={()=>void cardTopup()}>Kontroleer / hervat kaartbetaling</button>
+        <details><summary>Herstel met Yoco-betaling-ID</summary>
+          <p>Gebruik slegs die betaling-ID van die oorspronklike Yoco-transaksie. Die bediener moet die bedrag en verwysing bevestig.</p>
+          <label>Yoco-betaling-ID<input value={recoveryId} disabled={Boolean(busy)||!!cardPending.recovery_payment_id} onChange={e=>setRecoveryId(e.target.value)} /></label>
+          <button className="app-secondary" disabled={Boolean(busy)||!recoveryId.trim()||!!pending||!!cardPending.cancel_reason} onClick={()=>void cardTopup(true)}>Bevestig oorspronklike betaling</button>
+        </details>
+        <label>Rede om kaartaanvulling te kanselleer<input value={cardCancelReason} maxLength={300} disabled={Boolean(busy)||!!cardPending.cancel_reason} onChange={e=>setCardCancelReason(e.target.value)} /></label>
+        <p>Slegs ’n versoek wat nog nie na Yoco gestuur is nie kan hier gekanselleer word. Dit is nie ’n refund nie.</p>
+        <button className="app-secondary" disabled={Boolean(busy)||cardCancelReason.trim().length<3} onClick={()=>void cancelCardTopup()}>{cardPending.cancel_reason?'Hervat kaartkansellasie':'Kanselleer ongestuurde kaartaanvulling'}</button>
+      </section>}
+      {cardRedirect&&<iframe title="Yoco kaartbetaling" src={cardRedirect} referrerPolicy="no-referrer" style={{width:'100%',height:520,border:0}} />}
       <p className="request-intro">Soek ’n gas se beursie per ID of selfoon, skep ’n nuwe beursie indien nodig, en teken kontant of kaart-topups binne die app aan.</p>
 
       <form className="topup-panel" onSubmit={lookup}>
@@ -3851,7 +4143,7 @@ function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
         </button>
       </form>
 
-      {wallet && (
+      {wallet && !cardPending && (
         <section className="topup-panel">
           <div className="purchase-heading">
             <div>
@@ -3873,11 +4165,11 @@ function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
           <label>Nota / verwysing
             <input value={note} onChange={(event) => setNote(event.target.value)} placeholder={method === "card" ? "Yoco strokie/verwysing indien beskikbaar" : "Opsioneel"} />
           </label>
-          <button className="app-primary" type="button" disabled={busy === "topup" || amount < 1000 || amount > 500000} onClick={() => void topup()}>
+          <button className="app-primary" type="button" disabled={Boolean(busy)||!restored||!shiftReady||!lease||Boolean(pending)||(method==='card'&&!config?.cashier_card_topup_enabled)||amount < 1000 || amount > 500000} onClick={() => void (method==='card'?cardTopup():topup())}>
             {busy === "topup" ? <RefreshCw className="spin" /> : <ShieldCheck />}
             {busy === "topup" ? "Stoor…" : `Stoor ${method === "cash" ? "kontant" : "kaart"} topup`}
           </button>
-          <small className="payment-note">Gebruik “Kaart” nadat die Yoco-kaartbetaling by die kassier bevestig is. Die balans word onmiddellik op die backend geaudit.</small>
+          <small className="payment-note">Aanvullings vereis ’n oop skof. Kaartkrediet word eers toegepas nadat Yoco die oorspronklike betaling bevestig het.{!config?.cashier_card_topup_enabled&&' Kaartaanvulling is nog nie op hierdie omgewing geaktiveer nie.'}</small>
         </section>
       )}
 
@@ -3890,6 +4182,9 @@ function PosWalletTopupPanel({ onBack }: { onBack?: () => void }) {
 function FamilyFlow() {
   const [family, setFamily] = useState<FamilyMember[] | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<FamilyMember | null>(null);
+  const [confirmRemoval, setConfirmRemoval] = useState(false);
+  const saving = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const load = async () => {
@@ -3909,16 +4204,37 @@ function FamilyFlow() {
   }, []);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (saving.current) return;
+    saving.current = true;
     setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
     try {
-      await api("/api/app/family", { method: "POST", body: JSON.stringify({ name: form.get("name"), relationship: form.get("relationship"), date_of_birth: form.get("date_of_birth"), email: form.get("email"), phone: form.get("phone") }) });
+      await api(editing ? `/api/app/family/${editing.id}` : "/api/app/family", { method: editing ? "PATCH" : "POST", body: JSON.stringify({ name: form.get("name"), relationship: form.get("relationship"), date_of_birth: form.get("date_of_birth"), email: form.get("email"), phone: form.get("phone") }) });
       setAdding(false);
+      setEditing(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ons kon nie die familielid byvoeg nie");
+      setError(err instanceof Error ? err.message : "Ons kon nie die familielid stoor nie");
     } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  };
+  const removeMember = async () => {
+    if (!editing || !confirmRemoval || saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/api/app/family/${editing.id}`, { method: "DELETE" });
+      setConfirmRemoval(false);
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ons kon nie die familielid verwyder nie");
+    } finally {
+      saving.current = false;
       setBusy(false);
     }
   };
@@ -3930,25 +4246,41 @@ function FamilyFlow() {
       <p className="family-intro">Voeg die mense by vir wie jy kaartjies bestuur. Jy kan daarna elke kaartjie aan die regte persoon toewys.</p>
       {error && <p className="form-error">{error}</p>}
       {family === null ? <p className="loading-line"><RefreshCw className="spin" /> Laai familielede…</p> : family.length ? (
-        <div className="family-list">{family.map((member) => <article key={member.id}><span className="family-avatar">{member.name.charAt(0)}</span><div><strong>{member.name}</strong><small>{member.relationship || "Familielid"}{member.date_of_birth ? ` · ${member.date_of_birth}` : ""}</small></div></article>)}</div>
+        <div className="family-list">{family.map((member) => <article key={member.id}><span className="family-avatar">{member.name.charAt(0)}</span><div><strong>{member.name}</strong><small>{member.relationship || "Familielid"}{member.date_of_birth ? ` · ${member.date_of_birth}` : ""}</small></div><button type="button" className="text-button" disabled={busy || adding || Boolean(editing)} aria-label={`Wysig ${member.name}`} onClick={() => { setError(""); setEditing(member); }}>Wysig</button></article>)}</div>
       ) : <EmptyState icon={<Users />} title="Nog geen familielede nie" text="Voeg ’n familielid by om kaartjies namens hulle te bestuur." />}
-      {adding ? (
-        <form className="family-form" onSubmit={submit}>
-          <label>Volle naam<input name="name" required minLength={2} /></label>
-          <label>Verwantskap<input name="relationship" placeholder="bv. Kind, eggenoot" /></label>
-          <label>Geboortedatum<input name="date_of_birth" type="date" /></label>
-          <label>E-pos (opsioneel)<input name="email" type="email" /></label>
-          <label>Selfoon (opsioneel)<input name="phone" inputMode="tel" /></label>
+      {adding || editing ? (
+        <form className="family-form" key={editing?.id || "new"} onSubmit={submit}>
+          <h3>{editing ? "Wysig familielid" : "Voeg familielid by"}</h3>
+          <label>Volle naam<input name="name" required minLength={2} defaultValue={editing?.name || ""} readOnly={busy} /></label>
+          <label>Verwantskap<input name="relationship" placeholder="bv. Kind, eggenoot" defaultValue={editing?.relationship || ""} readOnly={busy} /></label>
+          <label>Geboortedatum<input name="date_of_birth" type="date" defaultValue={editing?.date_of_birth || ""} readOnly={busy} /></label>
+          <label>E-pos (opsioneel)<input name="email" type="email" defaultValue={editing?.email || ""} readOnly={busy} /></label>
+          <label>Selfoon (opsioneel)<input name="phone" inputMode="tel" defaultValue={editing?.phone || ""} readOnly={busy} /></label>
           <button className="app-primary" disabled={busy}>{busy ? <RefreshCw className="spin" /> : <UserPlus />}{busy ? "Stoor…" : "Stoor familielid"}</button>
-          <button type="button" className="text-button" onClick={() => setAdding(false)}>Kanselleer</button>
+          <button type="button" className="text-button" disabled={busy} onClick={() => { setAdding(false); setEditing(null); }}>Kanselleer</button>
+          {editing && <button type="button" className="text-button" disabled={busy} onClick={() => { setError(""); setConfirmRemoval(true); }}>Verwyder familielid</button>}
         </form>
       ) : <button className="sheet-primary-link family-add" onClick={() => setAdding(true)}><UserPlus /> Voeg familielid by</button>}
+      <AlertDialog open={confirmRemoval} onOpenChange={(open) => { if (!saving.current) setConfirmRemoval(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Verwyder {editing?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>Die persoon sal nie meer in jou familielys verskyn nie. Skuif enige toegekende kaartjies eers na jouself of ’n ander familielid. Hierdie aksie kanselleer nie kaartjies nie.</AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Hou familielid</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={busy} onClick={(event) => { event.preventDefault(); void removeMember(); }}>{busy ? "Verwyder…" : "Verwyder familielid"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
 
 function PhotosFlow() {
   const [photos, setPhotos] = useState<AppPhoto[] | null>(null);
+  const [canModerate, setCanModerate] = useState(false);
   const [title, setTitle] = useState("");
   const [caption, setCaption] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -3958,11 +4290,12 @@ function PhotosFlow() {
   const load = async () => {
     const result = await api("/api/app/photos");
     setPhotos(result.photos || []);
+    setCanModerate(result.can_moderate === true);
   };
   useEffect(() => {
     let active = true;
     void api("/api/app/photos")
-      .then((result) => { if (active) setPhotos(result.photos || []); })
+      .then((result) => { if (active) { setPhotos(result.photos || []); setCanModerate(result.can_moderate === true); } })
       .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Foto’s kon nie gelaai word nie"); });
     return () => { active = false; };
   }, []);
@@ -3972,6 +4305,7 @@ function PhotosFlow() {
       setError("Kies asseblief ’n foto.");
       return;
     }
+    const formElement = event.currentTarget;
     setBusy(true);
     setError("");
     setMessage("");
@@ -3984,7 +4318,7 @@ function PhotosFlow() {
       setFile(null);
       setTitle("");
       setCaption("");
-      const input = event.currentTarget.querySelector<HTMLInputElement>('input[type="file"]');
+      const input = formElement.querySelector<HTMLInputElement>('input[type="file"]');
       if (input) input.value = "";
       setMessage("Foto opgelaai. Dit wag nou vir goedkeuring voordat dit publiek gebruik word.");
       await load();
@@ -3999,6 +4333,7 @@ function PhotosFlow() {
       <span className="detail-icon"><Images /></span>
       <p className="eyebrow">Skoufoto’s</p>
       <h2>Laai foto’s op</h2>
+      {canModerate && <PhotoModeration onChanged={load} />}
       <p className="request-intro">Laai jou Skoufoto’s direk uit die app op. Nuwe foto’s bly eers privaat/pending totdat admin dit goedkeur vir publieke albums, bemarking of grootskerm gebruik.</p>
       <form className="photo-upload-form" onSubmit={submit}>
         <label>Titel
@@ -4049,6 +4384,9 @@ function PhotosFlow() {
 }
 
 function MessagesPanel({ user }: { user: AppUser }) {
+  const composeRef = useRef<HTMLFormElement>(null);
+  const sendingRef = useRef(false);
+  const [replyTo, setReplyTo] = useState<AppMessage | null>(null);
   const [contacts, setContacts] = useState<AppMessageContact[]>([]);
   const [messages, setMessages] = useState<AppMessage[] | null>(null);
   const [selected, setSelected] = useState("committee:0");
@@ -4078,28 +4416,41 @@ function MessagesPanel({ user }: { user: AppUser }) {
   }, []);
   const send = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     const [recipient_type, rawId] = selected.split(":");
     setBusy(true);
     setError("");
     try {
-      await api("/api/app/messages", { method: "POST", body: JSON.stringify({ recipient_type, recipient_id: Number(rawId || 0), body }) });
+      await api(replyTo ? `/api/app/messages/${replyTo.id}/reply` : "/api/app/messages", {
+        method: "POST",
+        body: JSON.stringify(replyTo ? { body } : { recipient_type, recipient_id: Number(rawId || 0), body }),
+      });
       setBody("");
-      await load();
+      setReplyTo(null);
+      try { await load(); } catch {
+        setError("Boodskap gestuur, maar die lys kon nie herlaai word nie. Moenie weer stuur nie.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Boodskap kon nie gestuur word nie");
     } finally {
+      sendingRef.current = false;
       setBusy(false);
     }
   };
   return (
     <SimplePanel title="Boodskappe" subtitle={user.source === "staff" ? "Komitee- en personeelkommunikasie." : "Familie-notas en boodskappe aan die Skou-kantoor."}>
-      <form className="message-compose" onSubmit={send}>
-        <label>Stuur aan
+      <form ref={composeRef} className="message-compose" onSubmit={send}>
+        {replyTo ? <div className="provider-note">
+          <strong>Antwoord aan {replyTo.sender_name}</strong>
+          <p>{replyTo.body}</p>
+          <button type="button" className="app-secondary" disabled={busy} onClick={() => setReplyTo(null)}>Kanselleer antwoord</button>
+        </div> : <label>Stuur aan
           <select value={selected} onChange={(event) => setSelected(event.target.value)}>
             {contacts.map((contact) => <option key={`${contact.type}:${contact.id}`} value={`${contact.type}:${contact.id}`}>{contact.name}</option>)}
           </select>
-        </label>
-        {contacts.length > 0 && (
+        </label>}
+        {!replyTo && contacts.length > 0 && (
           <div className="contact-strip">
             {contacts.slice(0, 8).map((contact) => (
               <button type="button" key={`${contact.type}:${contact.id}`} className={selected === `${contact.type}:${contact.id}` ? "active" : ""} onClick={() => setSelected(`${contact.type}:${contact.id}`)}>
@@ -4112,7 +4463,7 @@ function MessagesPanel({ user }: { user: AppUser }) {
         <label>Boodskap
           <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Tik jou boodskap hier…" maxLength={1000} />
         </label>
-        <button className="app-primary" disabled={busy || body.trim().length < 2 || contacts.length === 0}>
+        <button className="app-primary" disabled={busy || body.trim().length < 2 || (!replyTo && contacts.length === 0)}>
           {busy ? <RefreshCw className="spin" /> : <MessageCircle />}
           {busy ? "Stuur…" : "Stuur boodskap"}
         </button>
@@ -4126,6 +4477,11 @@ function MessagesPanel({ user }: { user: AppUser }) {
             <article key={item.id} className={item.direction}>
               <small>{item.direction === "outgoing" ? `Aan ${item.recipient_name}` : `Van ${item.sender_name}`} · {new Date(item.created_at * 1000).toLocaleString("af-ZA")}</small>
               <p>{item.body}</p>
+              {item.can_reply && <button type="button" className="app-secondary" disabled={busy} onClick={() => {
+                setReplyTo(item);
+                composeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                composeRef.current?.querySelector("textarea")?.focus({ preventScroll: true });
+              }}>Antwoord</button>}
             </article>
           ))
         ) : (

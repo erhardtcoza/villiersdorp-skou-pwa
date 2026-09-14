@@ -1,8 +1,12 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import type { D1Database, Fetcher } from "@cloudflare/workers-types";
+import { backendOrigin as resolveBackendOrigin } from "../lib/backend-origin";
+import { fetchHealthJson } from "./health-fetch";
 
 interface Env {
+  DEV_BACKEND?: Fetcher;
   ASSETS: Fetcher;
   DB: D1Database;
   IMAGES: {
@@ -19,18 +23,19 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-async function proxyBackend(request: Request, upstreamPath?: string): Promise<Response> {
+async function proxyBackend(request: Request, upstreamPath?: string, env?: Env): Promise<Response> {
   const url = new URL(request.url);
-  const backendOrigin = "https://tickets.villiersdorpskou.co.za";
+  const backendOrigin = resolveBackendOrigin(request.url);
   const upstream = new URL(upstreamPath || `${url.pathname}${url.search}`, backendOrigin);
   const headers = new Headers(request.headers);
   headers.set("host", upstream.host);
-  const response = await fetch(new Request(upstream, {
+  const upstreamRequest = new Request(upstream, {
     method: request.method,
     headers,
     body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
     redirect: "manual",
-  }));
+  });
+  const response = await (backendOrigin.includes("skou-events-dev.") && env?.DEV_BACKEND ? env.DEV_BACKEND.fetch(upstreamRequest) : fetch(upstreamRequest));
   const proxiedHeaders = new Headers(response.headers);
   proxiedHeaders.set("cache-control", "no-store");
   const location = proxiedHeaders.get("location");
@@ -50,6 +55,11 @@ async function proxyBackend(request: Request, upstreamPath?: string): Promise<Re
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const backendOrigin = resolveBackendOrigin(request.url);
+    const isDevelopment = backendOrigin.includes("skou-events-dev.");
+    if (isDevelopment && url.pathname === "/robots.txt") {
+      return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": "noindex, nofollow" } });
+    }
 
     if (url.pathname === "/api/app/health") {
       const checkedAt = new Date().toISOString();
@@ -64,17 +74,19 @@ const worker = {
         ok: false,
         service: "villiersdorp-skou-app",
         checked_at: checkedAt,
-        upstream: "tickets.villiersdorpskou.co.za",
+        upstream: new URL(backendOrigin).hostname,
         checks: {
           app_worker: { status: "ok", detail: "PWA worker is responding." },
         },
       };
 
       try {
-        const backendHealth = await fetch("https://tickets.villiersdorpskou.co.za/api/app/health", {
-          headers: { accept: "application/json" },
-        });
-        const backendBody = await backendHealth.json().catch(() => null) as {
+        const transport = (probe: Request) => isDevelopment && env.DEV_BACKEND ? env.DEV_BACKEND.fetch(probe) : fetch(probe);
+        const [backendHealth, publicHealth] = await Promise.all([
+          fetchHealthJson(`${backendOrigin}/api/app/health`, transport),
+          fetchHealthJson(`${backendOrigin}/api/public/health`, transport),
+        ]);
+        const backendBody = backendHealth.body as {
           ok?: boolean;
           event?: { id?: number; name?: string; sales_closed?: number | boolean };
           checks?: Record<string, { status?: "ok" | "warn" | "fail"; detail?: string }>;
@@ -98,10 +110,7 @@ const worker = {
             detail: check.detail || "Backend check returned no detail.",
           };
         }
-        const publicHealth = await fetch("https://tickets.villiersdorpskou.co.za/api/public/health", {
-          headers: { accept: "application/json" },
-        });
-        const publicBody = await publicHealth.json().catch(() => null) as { ok?: boolean; ticket_types?: number; event?: { sales_closed?: number | boolean } } | null;
+        const publicBody = publicHealth.body as { ok?: boolean; ticket_types?: number; event?: { sales_closed?: number | boolean } } | null;
         const ticketTypes = Number(publicBody?.ticket_types || 0);
         payload.event.ticket_types = ticketTypes;
         payload.event.sales_closed = publicBody?.event?.sales_closed === true || Number(publicBody?.event?.sales_closed || 0) === 1;
@@ -109,11 +118,11 @@ const worker = {
           status: publicHealth.ok && ticketTypes > 0 ? "ok" : "warn",
           detail: ticketTypes > 0 ? `${ticketTypes} ticket types available.` : "No public ticket types returned.",
         };
-        payload.ok = backendOk && ticketTypes > 0;
+        payload.ok = backendOk && publicHealth.ok && publicBody?.ok === true && Number.isSafeInteger(ticketTypes) && ticketTypes > 0;
       } catch (error) {
         payload.checks.backend_api = {
           status: "fail",
-          detail: error instanceof Error ? error.message : "App backend API could not be reached.",
+          detail: "App backend health checks failed or timed out. Please try again shortly.",
         };
         payload.checks.ticket_catalogue = {
           status: "fail",
@@ -123,27 +132,27 @@ const worker = {
 
       return new Response(JSON.stringify(payload), {
         status: payload.ok ? 200 : 503,
-        headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+        headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow, noarchive" },
       });
     }
 
     if (url.pathname === "/app" || url.pathname === "/scan" || url.pathname.startsWith("/scan/")) {
       const posArea = url.searchParams.get("pos_area");
-      const module = url.pathname === "/scan" || url.pathname.startsWith("/scan/")
+      const moduleKey = url.pathname === "/scan" || url.pathname.startsWith("/scan/")
         ? "gates"
         : posArea === "kroeg"
           ? "bar-pos"
           : posArea === "kombuis"
             ? "kitchen-pos"
             : "pos";
-      return Response.redirect(new URL(`/?module=${encodeURIComponent(module)}`, url.origin), 302);
+      return Response.redirect(new URL(`/?module=${encodeURIComponent(moduleKey)}`, url.origin).toString(), 302);
     }
 
     const isBackendPage = url.pathname.startsWith("/pos/");
     const isBackendMedia = url.pathname.startsWith("/media/");
     const isBackendApi = url.pathname.startsWith("/api/");
     if (isBackendPage || isBackendMedia || isBackendApi) {
-      return proxyBackend(request);
+      return proxyBackend(request, undefined, env);
     }
 
     if (url.pathname === "/_vinext/image") {
@@ -157,7 +166,11 @@ const worker = {
       }, allowedWidths);
     }
 
-    return handler.fetch(request, env, ctx);
+    const rendered = await handler.fetch(request, env, ctx);
+    if (!isDevelopment) return rendered;
+    const previewHeaders = new Headers(rendered.headers);
+    previewHeaders.set("x-robots-tag", "noindex, nofollow, noarchive");
+    return new Response(rendered.body, { status: rendered.status, statusText: rendered.statusText, headers: previewHeaders });
   },
 };
 

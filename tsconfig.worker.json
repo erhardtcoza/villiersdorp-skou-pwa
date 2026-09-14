@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "types": ["@cloudflare/workers-types", "node"],
+    "incremental": false
+  },
+  "include": ["worker/**/*.ts", "db/**/*.ts", "examples/**/*.ts", "cloudflare-env.d.ts"],
+  "exclude": ["node_modules", "dist", "mobile", "work", "outputs", ".sites-runtime", ".wrangler"]
+}

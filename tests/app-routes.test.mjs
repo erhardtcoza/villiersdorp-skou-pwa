@@ -62,14 +62,16 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /api\(`\/api\/public\/vendors/);
   assert.match(source, /api\("\/api\/app\/photos"/);
   assert.match(source, /form\.set\("file",\s*file\)/);
-  assert.match(source, /init\?\.body instanceof FormData/);
+  assert.match(source, /import \{ api \} from "\.\.\/lib\/app-api"/);
   assert.match(source, /<MessagesPanel user=\{user\} \/>/);
   assert.match(source, /api\("\/api\/app\/messages\/contacts"\)/);
   assert.match(source, /api\("\/api\/app\/messages"\)/);
   assert.match(source, /moduleKey === "wallet-topup"[\s\S]*<PosWalletTopupPanel/);
   assert.match(source, /api\(`\/api\/app\/staff\/wallets\/lookup\?q=\$\{encodeURIComponent\(query\.trim\(\)\)\}`\)/);
   assert.match(source, /api\("\/api\/app\/staff\/wallets\/create"/);
-  assert.match(source, /api\("\/api\/app\/staff\/wallets\/topup"/);
+  assert.match(source, /journal.submit\(lease\)/);
+  const cashier = await readFile(path.join(root, "lib/cashier-topup.ts"), "utf8");
+  assert.match(cashier, /request\('\/api\/app\/staff\/wallets\/topup'/);
   assert.doesNotMatch(source, /key:\s*"wallet-topup"[\s\S]{0,260}href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/bar\/topup"/);
   assert.match(source, /key:\s*"kitchen-pos"[\s\S]*?permissions:\s*\["kitchen_pos"\]/);
   assert.match(source, /key:\s*"gate-pos"[\s\S]*?target:\s*"pos"[\s\S]*?area:\s*"hek"/);
@@ -80,9 +82,7 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.doesNotMatch(source, /window\.location\.href = result\.launch_url/);
   assert.match(source, /function InAppPosPanel/);
   assert.match(source, /api\(`\/api\/pos-v1\/products\?location_id=/);
-  assert.match(source, /api\("\/api\/pos-v1\/orders"/);
-  assert.match(source, /api\(`\/api\/pos-v1\/orders\/\$\{encodeURIComponent\(order\.id\)\}\/pay`/);
-  assert.match(source, /api\(`\/api\/pos-v1\/orders\/\$\{encodeURIComponent\(order\.id\)\}\/fulfil`/);
+  assert.match(source, /checkout\.run\(resume \? null/);
   assert.match(source, /method === "event_balance" && Number\(customer\?\.balance_cents \|\| 0\) < total/);
   assert.doesNotMatch(source, /https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=/);
   assert.doesNotMatch(source, /https:\/\/tickets\.villiersdorpskou\.co\.za\/scan/);
@@ -101,7 +101,7 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /moduleKey === "horse-processing" && staffReview[\s\S]*<HorseApplicationsPanel/);
   assert.match(source, /fallbackAdditions = scopedFallbackOptions\.filter/);
   assert.match(source, /moduleKey === "pos"[\s\S]*option\.key === "wallet-topup"/);
-  assert.match(source, /page === "pos"[\s\S]*title="Kies POS-afdeling"[\s\S]*<PosLauncherPanel moduleKey="pos-menu" ModuleIcon=\{ScanLine\} \/>/);
+  assert.match(source, /page === "pos"[\s\S]*title="Kies POS-afdeling"[\s\S]*<PosLauncherPanel userId=\{user.id\} moduleKey="pos-menu" ModuleIcon=\{ScanLine\} \/>/);
   assert.match(source, /kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling/);
   const appModuleSource = source.slice(source.indexOf("const appModules:"), source.indexOf("const appModuleGroups:"));
   assert.doesNotMatch(appModuleSource, /https:\/\/www\.villiersdorpskou\.co\.za/);
@@ -187,15 +187,17 @@ test("bar refund clients surface backend failures and reuse refund keys while bu
   const webSource = await readFile(path.join(root, "app/page.tsx"), "utf8");
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
 
-  assert.match(webSource, /!response\.ok \|\| data\?\.ok === false/);
-  assert.match(webSource, /data\.request_id \? ` Verwysing: \$\{data\.request_id\}` : ""/);
+  // HTTP errors, reference IDs and multipart handling are executed in app-api.test.mjs.
+  assert.match(webSource, /import \{ api \} from "\.\.\/lib\/app-api"/);
   assert.match(webSource, /useState\(hasAnyPermission\(user, \["bar_refunds"\]\)\)/);
-  assert.match(webSource, /const idempotencyKey = refundKeys\[transaction\.id\] \|\| crypto\.randomUUID\(\)/);
-  assert.match(webSource, /idempotency_key: idempotencyKey/);
-  assert.match(webSource, /Yoco het nog nie finaal bevestig nie/);
+  assert.match(webSource, /refundJournal\.run\(orderId, draft\)/);
+  assert.match(webSource, /Hervat oorspronklike refund/);
+  // Outcome copy and terminal journal behavior execute in refund-journal.test.mjs.
+  assert.match(webSource, /refundOutcome\(result.refund\?\.status\)/);
+  assert.match(webSource, /if \(outcome.failed\) setError\(outcome.message\)/);
   assert.match(webSource, /Die app probeer die Yoco-kaart refund dadelik/);
-  assert.match(webSource, /health\.checks\?\.yoco_payments\?\.detail/);
-  assert.match(webSource, /health\.checks\?\.pos_config\?\.detail/);
+  assert.match(webSource, /health\?\.checks\?\.yoco_payments\?\.detail/);
+  assert.match(webSource, /health\?\.checks\?\.pos_config\?\.detail/);
 
   assert.match(nativeSource, /!response\.ok \|\| data\?\.ok === false/);
   assert.match(nativeSource, /Die versoek het te lank geneem\. Herlaai die app en probeer weer/);
@@ -211,8 +213,8 @@ test("bar refund clients surface backend failures and reuse refund keys while bu
 test("app health route checks the app backend and ticket catalogue", async () => {
   const workerSource = await readFile(path.join(root, "worker/index.ts"), "utf8");
 
-  assert.match(workerSource, /https:\/\/tickets\.villiersdorpskou\.co\.za\/api\/app\/health/);
-  assert.match(workerSource, /https:\/\/tickets\.villiersdorpskou\.co\.za\/api\/public\/health/);
+  assert.match(workerSource, /\$\{backendOrigin\}\/api\/app\/health/);
+  assert.match(workerSource, /\$\{backendOrigin\}\/api\/public\/health/);
   assert.match(workerSource, /App backend health API is reachable/);
   assert.match(workerSource, /payload\.checks\.ticket_catalogue/);
 });
@@ -220,10 +222,10 @@ test("app health route checks the app backend and ticket catalogue", async () =>
 test("app worker keeps POS V1 APIs but redirects legacy POS pages back into the app", async () => {
   const workerSource = await readFile(path.join(root, "worker/index.ts"), "utf8");
 
-  assert.match(workerSource, /async function proxyBackend\(request: Request, upstreamPath\?: string\)/);
+  assert.match(workerSource, /async function proxyBackend\(request: Request, upstreamPath\?: string, env\?: Env\)/);
   assert.match(workerSource, /url\.pathname === "\/app"/);
   assert.match(workerSource, /url\.pathname === "\/scan"/);
-  assert.match(workerSource, /Response\.redirect\(new URL\(`\/\?module=\$\{encodeURIComponent\(module\)\}`/);
+  assert.match(workerSource, /Response\.redirect\(new URL\(`\/\?module=\$\{encodeURIComponent\(moduleKey\)\}`/);
   assert.match(workerSource, /posArea === "kroeg"[\s\S]*\? "bar-pos"/);
   assert.match(workerSource, /posArea === "kombuis"[\s\S]*\? "kitchen-pos"/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/pos\/"\)/);

@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {cashierTopupJournal} from '../lib/cashier-topup.ts';
+const input={shift_id:'S',wallet_id:'W',terminal_code:'T',location_id:1,event_id:1,amount_cents:1000,method:'cash',note:'cash received'};
+const lease={terminal_code:'T',device_instance_id:'D',lease_token:'secret'};
+const store=()=>{const data=new Map();return {data,getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)};};
+test('cashier journal preserves exact intent on unknown outcome and remount, without credentials',async()=>{
+  const s=store();let calls=[];
+  const failed=cashierTopupJournal(s,1,async(_path,opt)=>{calls.push(JSON.parse(opt.body));throw Error('lost response')});
+  const original=failed.prepare(input);
+  await assert.rejects(failed.submit(lease),/lost response/);
+  const recovered=cashierTopupJournal(s,1,async(_path,opt)=>{const sent=JSON.parse(opt.body);calls.push(sent);return {ok:true,topup:{...original,id:'receipt',operator_id:1,status:'completed'}}});
+  assert.deepEqual(recovered.pending(),original);
+  assert.doesNotMatch([...s.data.values()].join(''),/secret|lease_token|device_instance_id/);
+  for(const patch of [{amount_cents:2000},{wallet_id:'OTHER'},{shift_id:'OTHER'},{location_id:2},{note:'changed'}])assert.throws(()=>recovered.prepare({...input,...patch}),/Hervat/);
+  await recovered.submit({...lease,lease_token:'renewed'});
+  assert.equal(calls[0].idempotency_key,calls[1].idempotency_key);
+  assert.equal(recovered.pending(),null);
+});
+test('cashier recovery rejects mismatched receipts and concurrent submit',async()=>{
+  const s=store();let finish;
+  const j=cashierTopupJournal(s,1,()=>new Promise(resolve=>{finish=resolve}));
+  const intent=j.prepare(input),running=j.submit(lease);
+  await assert.rejects(j.submit(lease),/reeds/);
+  finish({ok:true,topup:{...intent,id:'r',operator_id:2,status:'completed'}});
+  await assert.rejects(running,/nog nie bevestig/);assert.deepEqual(j.pending(),intent);
+  await assert.rejects(j.submit({...lease,terminal_code:'OTHER'}),/oorspronklike/);
+  assert.equal(cashierTopupJournal(s,2,async()=>{}).pending(),null);
+  s.data.set([...s.data.keys()][0],'{');assert.throws(()=>j.prepare(input),/Kontak admin/);
+});

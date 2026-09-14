@@ -1,0 +1,94 @@
+/* Apple Design principles adapted to the Skou identity, not an Apple clone.
+   Reference: github.com/emilkowalski/skills/tree/main/skills/apple-design
+   Native scrolling remains gesture-driven; financial actions still commit on click. */
+.live-app-shell {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  font-optical-sizing: auto;
+}
+.live-app-shell :is(h1, h2, h3) {
+  letter-spacing: -.025em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.live-app-shell :is(.subpage-header h1, .module-screen h2, .simple-panel h2) {
+  font-family: inherit;
+  font-weight: 750;
+}
+.live-app-shell :is(.request-intro, .privacy-note, .provider-note, .empty-state p) {
+  font-size: .9375rem;
+  line-height: 1.5;
+}
+.live-app-shell :is(label, .topup-panel label, .attendee-details label, .switch-label) {
+  font-size: .875rem;
+  line-height: 1.4;
+  font-weight: 650;
+}
+.live-app-shell :is(input, select, textarea),
+.live-app-shell :is(.topup-panel, .family-form, .attendee-details) :is(input, select, textarea) {
+  font-size: 1rem;
+  line-height: 1.4;
+  min-height: 2.75rem;
+  scroll-margin-block: 6rem;
+}
+.live-app-shell :is(button, a) { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.live-app-shell button:not(:disabled) {
+  transition: background-color 120ms ease-out, box-shadow 120ms ease-out, transform 120ms ease-out;
+}
+.live-app-shell button:not(:disabled):active {
+  transform: scale(.98);
+  transition-duration: 60ms;
+}
+.live-app-shell :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #98721a;
+  outline-offset: 3px;
+}
+.live-app-shell .module-toolbar {
+  background: rgba(255, 250, 240, .94);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  border-bottom-color: transparent;
+  box-shadow: 0 8px 18px -14px #123d2a66;
+  font-size: .9375rem;
+  letter-spacing: .005em;
+}
+.live-app-shell .module-return {
+  background: #fffdf8;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px #123d2a0a;
+}
+.live-app-shell .sheet-secondary.inline-back {
+  width: fit-content;
+  min-height: 2.75rem;
+  padding: .5rem .875rem;
+  font-size: .875rem;
+}
+.live-app-shell .module-screen-content { padding-top: 1.25rem; }
+.live-app-shell .eyebrow { font-size: .75rem; letter-spacing: .1em; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) {
+  .live-app-shell *, .live-app-shell *::before, .live-app-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  .live-app-shell button:not(:disabled):active { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .live-app-shell .module-toolbar, .live-app-shell .topbar {
+    background: #fffaf0;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .live-app-shell .module-toolbar {
+    background: #fffaf0;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-bottom: 2px solid #143c2d;
+  }
+  .live-app-shell :is(button, input, select, textarea) { border-color: #143c2d; }
+  .live-app-shell :is(.privacy-note, .request-intro, .provider-note) { color: #143c2d; }
+}
