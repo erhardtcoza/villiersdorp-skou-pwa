@@ -360,6 +360,19 @@ type HorseBackendApplication = {
   created_at: number;
   updated_at: number;
 };
+type AppInvoice = {
+  id: number;
+  invoice_no: string;
+  invoice_type?: string | null;
+  party_name?: string | null;
+  description?: string | null;
+  amount_cents: number;
+  status: string;
+  issued_at?: number | null;
+  created_at?: number | null;
+  due_at?: number | null;
+  cancel_reason?: string | null;
+};
 
 const roleNames: Record<string, string> = {
   admin: "Administrateur",
@@ -2283,6 +2296,8 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
           <ShowMapPanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : moduleKey === "wallet-topup" ? (
           <PosWalletTopupPanel key={user.id} userId={user.id} />
+        ) : moduleKey === "finance" ? (
+          <FinancePanel />
         ) : requestModuleDetails[moduleKey] ? (
           <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
         ) : moduleKey === "horse-processing" && staffReview ? (
@@ -3151,6 +3166,56 @@ function ShowMapPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; Modu
       )}
     </>
   );
+}
+
+function FinancePanel() {
+  const [invoices, setInvoices] = useState<AppInvoice[]>([]);
+  const [summary, setSummary] = useState({ total: 0, paid: 0, outstanding: 0, cancelled: 0, overdue: 0, total_cents: 0, outstanding_cents: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [type, setType] = useState("all");
+  const [status, setStatus] = useState("all");
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api("/api/app/staff/finance/invoices?limit=200");
+      setInvoices(Array.isArray(result.invoices) ? result.invoices : []);
+      setSummary(result.summary || { total: 0, paid: 0, outstanding: 0, cancelled: 0, overdue: 0, total_cents: 0, outstanding_cents: 0 });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fakture kon nie gelaai word nie");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const types = useMemo(() => [...new Set(invoices.map(invoice => String(invoice.invoice_type || "other")).filter(Boolean))].sort(), [invoices]);
+  const visible = useMemo(() => invoices.filter(invoice =>
+    (type === "all" || String(invoice.invoice_type || "other") === type) &&
+    (status === "all" || invoice.status === status)
+  ), [invoices, type, status]);
+  const money = (cents: number) => `R${(Number(cents || 0) / 100).toFixed(2)}`;
+  return <div className="module-flow finance-flow">
+    <p className="eyebrow">Finansies</p>
+    <div className="section-heading"><div><h2>Alle fakture</h2><p>Die sentrale register wys bestaande fakture uit elke afdeling.</p></div><button className="icon-button" aria-label="Verfris fakture" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? "spin" : ""} /></button></div>
+    {error && <div className="form-error">{error}<button type="button" onClick={() => void load()}>Probeer weer</button></div>}
+    <div className="live-summary" aria-label="Faktuur opsomming">
+      <div><strong>{summary.total}</strong><small>Fakture</small></div>
+      <div><strong>{money(summary.outstanding_cents)}</strong><small>Uitstaande</small></div>
+      <div><strong>{summary.paid}</strong><small>Betaal</small></div>
+      <div><strong>{summary.cancelled}</strong><small>Gekanselleer</small></div>
+    </div>
+    <div className="form-grid">
+      <label>Tipe<select value={type} onChange={event => setType(event.target.value)}><option value="all">Alle afdelings</option>{types.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+      <label>Status<select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Alle statusse</option><option value="draft">Gereed</option><option value="sent">Gestuur</option><option value="overdue">Uitstaande</option><option value="paid">Betaal</option><option value="cancelled">Gekanselleer</option></select></label>
+    </div>
+    {loading ? <p className="loading-line"><RefreshCw className="spin" /> Laai sentrale fakture…</p> : visible.length ? <div className="request-list finance-list">
+      {visible.map(invoice => <article key={invoice.id}>
+        <div><small>{String(invoice.invoice_type || "other")}</small><strong>{invoice.invoice_no}</strong><p>{invoice.party_name || "Geen party"}{invoice.description ? ` · ${invoice.description}` : ""}</p>{invoice.cancel_reason && <p className="muted">Rede: {invoice.cancel_reason}</p>}</div>
+        <div className="finance-amount"><strong>{money(invoice.amount_cents)}</strong><span data-status={invoice.status}>{{ draft: "Gereed", sent: "Gestuur", overdue: "Uitstaande", paid: "Betaal", cancelled: "Gekanselleer" }[invoice.status] || invoice.status}</span></div>
+      </article>)}
+    </div> : <EmptyState icon={<WalletCards />} title="Geen fakture gevind nie" text="Pas die filters aan of verfris die sentrale register." />}
+  </div>;
 }
 
 function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey: string; moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {

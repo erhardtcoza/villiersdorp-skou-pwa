@@ -67,6 +67,9 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /api\("\/api\/app\/messages\/contacts"\)/);
   assert.match(source, /api\("\/api\/app\/messages"\)/);
   assert.match(source, /moduleKey === "wallet-topup"[\s\S]*<PosWalletTopupPanel/);
+  assert.match(source, /moduleKey === "finance"[\s\S]*<FinancePanel/);
+  assert.match(source, /function FinancePanel\(\)[\s\S]*api\("\/api\/app\/staff\/finance\/invoices\?limit=200"\)/);
+  assert.match(source, /Die sentrale register wys bestaande fakture uit elke afdeling/);
   assert.match(source, /api\(`\/api\/app\/staff\/wallets\/lookup\?q=\$\{encodeURIComponent\(query\.trim\(\)\)\}`\)/);
   assert.match(source, /api\("\/api\/app\/staff\/wallets\/create"/);
   assert.match(source, /journal.submit\(lease\)/);
