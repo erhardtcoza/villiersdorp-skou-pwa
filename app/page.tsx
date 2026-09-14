@@ -685,7 +685,7 @@ const appModules: AppModule[] = [
     roles: ["staff", "committee"],
     permissions: ["finance_reconcile", "finance_reports", "vendors_invoices", "bar_cashup"],
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "meetings",
