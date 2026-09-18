@@ -4,6 +4,8 @@ Mobile-first progressive web app for the Villiersdorp Landbou Skou platform.
 
 The PWA is the test and implementation shell for visitor, vendor, staff and committee workflows. It is designed to connect to the existing Villiersdorp Skou Cloudflare backend instead of embedding desktop website pages or rebuilding working business logic.
 
+The approved product boundary is documented in [the React public website and back-office architecture](../docs/REACT-PUBLIC-AND-BACKOFFICE-ARCHITECTURE.md). The live migration register is the [module/action parity matrix](../docs/MODULE-ACTION-PARITY-MATRIX.md).
+
 ## Current preview
 
 - Live PWA: <https://app.villiersdorpskou.co.za>
