@@ -15,6 +15,18 @@ const appShellRoutes = [
   "app/verhurings/page.tsx",
 ];
 
+test("public React discovery page reads only the canonical public event APIs", async () => {
+  const source = await readFile(path.join(root, "app/ontdek/page.tsx"), "utf8");
+
+  assert.match(source, /^"use client";/);
+  assert.match(source, /fetch\("\/api\/public\/health"/);
+  assert.match(source, /fetch\(`\/api\/public\/show-sections/);
+  assert.match(source, /function publicSectionUrl/);
+  assert.match(source, /https:\/\/www\.villiersdorpskou\.co\.za/);
+  assert.doesNotMatch(source, /\/api\/app\//);
+  assert.doesNotMatch(source, /\/api\/admin\//);
+});
+
 test("app shell subroutes explicitly render the hydrated client app", async () => {
   for (const route of appShellRoutes) {
     const source = await readFile(path.join(root, route), "utf8");
