@@ -3214,7 +3214,10 @@ function FinancePanel() {
       setLoading(false);
     }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   const types = useMemo(() => [...new Set(invoices.map(invoice => String(invoice.invoice_type || "other")).filter(Boolean))].sort(), [invoices]);
   const visible = useMemo(() => invoices.filter(invoice =>
     (type === "all" || String(invoice.invoice_type || "other") === type) &&
@@ -3263,7 +3266,10 @@ function VendorProfilePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule
       setError(err instanceof Error ? err.message : "Uitstellerprofiel kon nie gelaai word nie");
     } finally { setLoading(false); }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!vendor || busy) return;
     setBusy(true); setError(""); setMessage("");
@@ -4237,7 +4243,8 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
       if(!mounted.current)return;
       if(result.terminal){
         setCardPending(null);setWallet(null);setRecoveryId('');setNote('');
-        setMessage(result.topup.status==='paid'?`Kaartaanvulling van R ${(result.topup.amount_cents/100).toFixed(2)} is bevestig. Verwysing: ${result.topup.id}.`:'Kaartbetaling is nie voltooi nie. Geen beursiekrediet is toegepas nie.');
+        const paid=result.topup?.status==='paid';
+        setMessage(paid?`Kaartaanvulling van R ${(Number(result.topup?.amount_cents||0)/100).toFixed(2)} is bevestig. Verwysing: ${result.topup?.id||"onbekend"}.`:'Kaartbetaling is nie voltooi nie. Geen beursiekrediet is toegepas nie.');
       }else{setCardPending(cardJournal.pending());setCardRedirect(result.redirect_url);setMessage('Betaling wag op bevestiging. Moenie ’n tweede betaling begin nie.');}
     }catch(err){if(mounted.current){setCardPending(cardJournal.pending());setError(err instanceof Error?err.message:'Kaartbetaling kon nie bevestig word nie.');}}
     finally{inFlight.current=false;if(mounted.current)setBusy('');}

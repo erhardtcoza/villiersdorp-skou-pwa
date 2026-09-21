@@ -5,6 +5,9 @@ type Store=Pick<Storage,'getItem'|'setItem'|'removeItem'>;
 type Intent=Omit<CashTopupIntent,'method'> & {method:'card'};
 type Journal={intent:Intent;topup_id?:string;recovery_payment_id?:string;cancel_reason?:string};
 type Request=(path:string,options:{method:string;body:string})=>Promise<unknown>;
+type RecordValue=Record<string,unknown>;
+type CardTopupResult={terminal:boolean;redirect_url:string|null;status?:string;topup?:{id?:string;status?:string;amount_cents?:number}};
+const isRecord=(value:unknown):value is RecordValue=>Boolean(value)&&typeof value==='object'&&!Array.isArray(value);
 const fields=['shift_id','wallet_id','terminal_code','event_id','location_id','amount_cents','note','idempotency_key'] as const;
 const text=(v:unknown,max=128):v is string=>typeof v==='string'&&!!v.trim()&&v.length<=max;
 const positive=(v:unknown):v is number=>Number.isSafeInteger(v)&&Number(v)>0;
@@ -15,9 +18,11 @@ export function cashierCardTopupJournal(storage:Store,userId:number,request:Requ
   if(!positive(userId))throw new Error('Meld eers as personeel aan.');
   const key=`skou-cashier-card-topup:${userId}`;
   let busy=false;
-  const cleanIntent=(v:any):Intent=>{
-    if(!v||v.method!=='card'||!['shift_id','wallet_id','terminal_code','idempotency_key'].every(k=>text(v[k]))||!positive(v.event_id)||!positive(v.location_id)||!Number.isSafeInteger(v.amount_cents)||v.amount_cents<1000||v.amount_cents>500000||typeof v.note!=='string'||v.note.length>300)throw uncertain();
-    return {shift_id:v.shift_id,wallet_id:v.wallet_id,terminal_code:v.terminal_code,event_id:v.event_id,location_id:v.location_id,amount_cents:v.amount_cents,note:v.note,idempotency_key:v.idempotency_key,method:'card'};
+  const cleanIntent=(v:unknown):Intent=>{
+    if(!isRecord(v))throw uncertain();
+    const shiftId=v.shift_id,walletId=v.wallet_id,terminalCode=v.terminal_code,idempotencyKey=v.idempotency_key,eventId=v.event_id,locationId=v.location_id,amountCents=v.amount_cents,note=v.note;
+    if(v.method!=='card'||!text(shiftId)||!text(walletId)||!text(terminalCode)||!text(idempotencyKey)||!positive(eventId)||!positive(locationId)||typeof amountCents!=='number'||!Number.isSafeInteger(amountCents)||amountCents<1000||amountCents>500000||typeof note!=='string'||note.length>300)throw uncertain();
+    return {shift_id:shiftId,wallet_id:walletId,terminal_code:terminalCode,event_id:eventId,location_id:locationId,amount_cents:amountCents,note,idempotency_key:idempotencyKey,method:'card'};
   };
   const pending=():Journal|null=>{
     const raw=storage.getItem(key);if(raw===null)return null;
@@ -31,8 +36,8 @@ export function cashierCardTopupJournal(storage:Store,userId:number,request:Requ
   };
   const write=(j:Journal)=>storage.setItem(key,JSON.stringify(j));
   const unchanged=(j:Journal)=>{if(JSON.stringify(pending())!==JSON.stringify(j))throw uncertain();};
-  const same=(a:Intent,b:any)=>b&&fields.every(k=>a[k]===b[k]);
-  const execute=async(cancel:boolean,lease?:ShiftLease)=>{
+  const same=(a:Intent,b:unknown)=>isRecord(b)&&fields.every(k=>a[k]===b[k]);
+  const execute=async(cancel:boolean,lease?:ShiftLease):Promise<CardTopupResult>=>{
     if(busy)throw new Error('Die kaartaanvulling word reeds bevestig.');
     const j=pending();if(!j)throw uncertain();
     if(cancel?!j.cancel_reason:!!j.cancel_reason)throw new Error('Hervat eers die bestaande kansellasie.');
@@ -40,26 +45,31 @@ export function cashierCardTopupJournal(storage:Store,userId:number,request:Requ
     busy=true;
     try{
       const body=cancel?{...j.intent,reason:j.cancel_reason}:{...j.intent,...(lease?{terminal_code:lease.terminal_code,device_instance_id:lease.device_instance_id,lease_token:lease.lease_token}:{}),...(j.recovery_payment_id?{recovery_payment_id:j.recovery_payment_id}:{})};
-      const r:any=await request(`/api/app/staff/wallets/card-topup/${cancel?'cancel':'start'}`,{method:'POST',body:JSON.stringify(body)});
+      const r=await request(`/api/app/staff/wallets/card-topup/${cancel?'cancel':'start'}`,{method:'POST',body:JSON.stringify(body)});
       unchanged(j);
-      if(r?.ok!==true||!same(j.intent,r.intent)||r.intent.operator_id!==userId||!text(r.intent.topup_id)||(j.topup_id&&j.topup_id!==r.intent.topup_id))throw uncertain();
+      if(!isRecord(r)||r.ok!==true||!isRecord(r.intent)||!same(j.intent,r.intent)||r.intent.operator_id!==userId)throw uncertain();
+      const intent=r.intent;
+      const rawTopupId=intent.topup_id;
+      if(!text(rawTopupId)||(j.topup_id&&j.topup_id!==rawTopupId))throw uncertain();
+      const topupId:string=rawTopupId;
       if(cancel&&r.status==='reconciliation_required'){
         const d=r.dispatch;
-        if(r.cancellation_reason!==j.cancel_reason||!d||d.topup_id!==r.intent.topup_id||d.client_reference!==r.intent.topup_id||!text(d.device_id)||!['sandbox','production'].includes(d.environment)||!positive(d.created_at))throw uncertain();
+        if(r.cancellation_reason!==j.cancel_reason||!isRecord(d)||d.topup_id!==intent.topup_id||d.client_reference!==intent.topup_id||!text(d.device_id)||!['sandbox','production'].includes(String(d.environment))||!positive(d.created_at))throw uncertain();
         // Retire only the failed cancellation mode; the original payment and
         // recovery candidate remain durable and must still be reconciled.
-        const {cancel_reason:_,...resume}=j;
-        write({...resume,topup_id:r.intent.topup_id});
-        return {...r,terminal:false,redirect_url:null};
+        const resume={...j};
+        delete resume.cancel_reason;
+        write({...resume,topup_id:topupId});
+        return {terminal:false,redirect_url:null,status:typeof r.status==='string'?r.status:undefined};
       }
       let terminal=false;
       if(cancel&&r.status==='cancelled'){
         const c=r.cancellation;
-        if(!c||c.topup_id!==r.intent.topup_id||c.actor_id!==userId||c.reason!==j.cancel_reason||!positive(c.created_at))throw uncertain();
+        if(!isRecord(c)||c.topup_id!==intent.topup_id||c.actor_id!==userId||c.reason!==j.cancel_reason||!positive(c.created_at))throw uncertain();
         terminal=true;
       }else{
         const t=r.topup;
-        if(!t||t.id!==r.intent.topup_id||t.wallet_id!==j.intent.wallet_id||t.subject_type!=='staff'||t.subject_id!==userId||t.amount_cents!==j.intent.amount_cents||t.checkout_id!==null)throw uncertain();
+        if(!isRecord(t)||t.id!==topupId||t.wallet_id!==j.intent.wallet_id||t.subject_type!=='staff'||t.subject_id!==userId||t.amount_cents!==j.intent.amount_cents||t.checkout_id!==null||typeof t.status!=='string')throw uncertain();
         if(t.status==='paid'){
           if(!positive(t.paid_at)||!text(t.yoco_payment_id)||(j.recovery_payment_id&&j.recovery_payment_id!==t.yoco_payment_id))throw uncertain();
           terminal=true;
@@ -70,12 +80,18 @@ export function cashierCardTopupJournal(storage:Store,userId:number,request:Requ
       }
       let redirect_url:string|null=null;
       if(!terminal&&r.redirect_url!=null){
+        if(typeof r.redirect_url!=='string')throw uncertain();
         const url=new URL(r.redirect_url);
         if(url.protocol!=='https:'||url.hostname!=='cpw.yoco.com'||url.port||url.username||url.password)throw uncertain();
         redirect_url=url.href;
       }
-      if(terminal)storage.removeItem(key);else write({...j,topup_id:r.intent.topup_id});
-      return {...r,redirect_url,terminal};
+      if(terminal)storage.removeItem(key);else write({...j,topup_id:topupId});
+      const topup=isRecord(r.topup)?{
+        id:typeof r.topup.id==='string'?r.topup.id:undefined,
+        status:typeof r.topup.status==='string'?r.topup.status:undefined,
+        amount_cents:typeof r.topup.amount_cents==='number'?r.topup.amount_cents:undefined
+      }:undefined;
+      return {terminal,redirect_url,status:typeof r.status==='string'?r.status:undefined,topup};
     }finally{busy=false;}
   };
   return {pending,prepare(input:Omit<Intent,'idempotency_key'>){

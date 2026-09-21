@@ -33,7 +33,12 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
     }catch(err){if(requestGeneration===generation.current)setError(err instanceof Error?err.message:'Skof kon nie gelaai word nie.');}
     finally{if(requestGeneration===generation.current){inFlight.current=false;setBusy(false);}}
   };
-  useEffect(()=>{generation.current++;inFlight.current=false;void refresh();return()=>{generation.current++;onReady(false);};},[journal,lease.lease_token,lease.device_instance_id]);
+  useEffect(()=>{
+    generation.current++;
+    inFlight.current=false;
+    const timer=window.setTimeout(()=>void refresh(),0);
+    return()=>{window.clearTimeout(timer);generation.current++;onReady(false);};
+  },[journal,lease.lease_token,lease.device_instance_id]);
   const open=async()=>{
     if(inFlight.current||busy||disabled||!loaded||pendingStop)return;
     inFlight.current=true;setBusy(true);setError('');onReady(false);
