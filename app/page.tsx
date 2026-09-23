@@ -390,6 +390,34 @@ type AppVendorProfile = {
   portal_status?: string | null;
   is_published?: boolean;
 };
+type AppMemberGroup = { id: number; code: string; name: string; annual_fee_cents: number; is_active: boolean; sort_order?: number };
+type AppMember = {
+  id: number;
+  group_id: number;
+  group_code?: string;
+  group_name?: string;
+  name: string;
+  email?: string | null;
+  mobile?: string | null;
+  status: string;
+  notes?: string | null;
+  email_opt_out?: boolean;
+  whatsapp_opt_out?: boolean;
+  annual_fee_override_cents?: number | null;
+};
+type AppMembershipApplication = {
+  id: number;
+  member_id?: number | null;
+  first_name: string;
+  last_name: string;
+  email?: string | null;
+  mobile?: string | null;
+  fee_period?: string | null;
+  amount_cents: number;
+  status: string;
+  payment_code?: string | null;
+  invoice_sent_at?: number | null;
+};
 
 const roleNames: Record<string, string> = {
   admin: "Administrateur",
@@ -960,17 +988,6 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
 };
 
 const requestModuleDetails: Record<string, ServiceModuleConfig> = {
-  membership: {
-    eyebrow: "Lidmaatskap",
-    title: "Lidmaatskap versoek",
-    intro: "Gebruik hierdie om aan te sluit, hernuwing te vra, of ’n lidmaatskap-probleem aan die kantoor te stuur.",
-    requestType: "membership_support",
-    primaryLabel: "Stuur lidmaatskap-versoek",
-    fields: [
-      { key: "membership_need", label: "Wat moet gebeur?", type: "select", required: true, options: ["Nuwe lid", "Hernu lidmaatskap", "Betaalstatus navraag", "Persoonlike besonderhede verander", "Ander"] },
-      { key: "member_reference", label: "Lidnaam of verwysing indien bekend", placeholder: "Byvoorbeeld: familienaam / ou lidnommer" },
-    ],
-  },
   "vendor-application": {
     eyebrow: "Uitstallers",
     title: "Stalletjie-aansoek",
@@ -2315,6 +2332,8 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
           <PosWalletTopupPanel key={user.id} userId={user.id} />
         ) : moduleKey === "finance" ? (
           <FinancePanel />
+        ) : moduleKey === "membership" ? (
+          <MembershipPanel user={user} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : moduleKey === "vendor-profile" ? (
           <VendorProfilePanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : requestModuleDetails[moduleKey] ? (
@@ -3245,6 +3264,86 @@ function FinancePanel() {
       </article>)}
     </div> : <EmptyState icon={<WalletCards />} title="Geen fakture gevind nie" text="Pas die filters aan of verfris die sentrale register." />}
   </div>;
+}
+
+function MembershipPanel({ user, moduleInfo, ModuleIcon }: { user: AppUser; moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const [groups, setGroups] = useState<AppMemberGroup[]>([]);
+  const [members, setMembers] = useState<AppMember[]>([]);
+  const [applications, setApplications] = useState<AppMembershipApplication[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<AppMember | "new" | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const canManage = user.source === "staff" && (user.role === "admin" || user.role === "manager" || (user.permissions || []).some((permission) => ["members_manage", "committee_manage"].includes(permission)));
+  const load = useCallback(async (search = query) => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api(`/api/app/staff/members?limit=200&query=${encodeURIComponent(search.trim())}`);
+      setGroups(result.groups || []);
+      setMembers(result.members || []);
+      setApplications(result.applications || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Lidmaatskaprekords kon nie gelaai word nie");
+    } finally { setLoading(false); }
+  }, [query]);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active) void load(""); });
+    return () => { active = false; };
+  }, [load]);
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (saving) return;
+    const form = new FormData(event.currentTarget);
+    setSaving(true); setError(""); setNotice("");
+    try {
+      await api("/api/app/staff/members/save", { method: "POST", body: JSON.stringify({
+        id: editing === "new" || !editing ? 0 : editing.id,
+        group_id: Number(form.get("group_id") || 0),
+        name: form.get("name"), email: form.get("email"), mobile: form.get("mobile"), status: form.get("status"),
+        notes: form.get("notes"), email_opt_out: form.get("email_opt_out") === "on", whatsapp_opt_out: form.get("whatsapp_opt_out") === "on"
+      }) });
+      setEditing(null);
+      setNotice(editing === "new" ? "Lid is bygevoeg." : "Lidrekord is gestoor.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Die lidrekord kon nie gestoor word nie");
+    } finally { setSaving(false); }
+  };
+  const activeApplications = applications.filter((application) => !["active", "paid", "cancelled"].includes(String(application.status || "").toLowerCase()));
+  return <>
+    <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+    <p className="eyebrow">Lidmaatskap</p><h2>{moduleInfo?.title || "Lidmaatskap"}</h2>
+    {!canManage ? <>
+      <p className="request-intro">Lidmaatskap word teen die bestaande Skou-lidrekords bestuur. Vra die Skoukantoor vir ’n amptelike aansluitingsuitnodiging of volg die publieke aansluitingsproses.</p>
+      <a className="sheet-primary-link module-launch" href="https://www.villiersdorpskou.co.za/sluit-aan">Open lidmaatskap <ArrowRight /></a>
+    </> : <>
+      <p className="request-intro">Hierdie skerm werk direk met die bestaande lede en groepe. Dit verander geen lidmaatskapbetaling, faktuur of WhatsApp outomaties nie.</p>
+      {notice && <p className="success-note"><CheckCircle2 />{notice}</p>}
+      {error && <p className="form-error">{error}</p>}
+      {editing !== null ? <form className="service-request-form" onSubmit={save}>
+        <div className="form-section-heading"><span>{editing === "new" ? "N" : "W"}</span><div><strong>{editing === "new" ? "Voeg lid by" : "Wysig lid"}</strong><small>Kontakvoorkeure bly deel van die kanonieke lidrekord.</small></div></div>
+        <label>Naam<input name="name" required defaultValue={editing === "new" ? "" : editing.name} /></label>
+        <label>Ledegroep<select name="group_id" required defaultValue={editing === "new" ? "" : String(editing.group_id)}><option value="">Kies ’n groep</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}{group.is_active ? "" : " (onaktief)"}</option>)}</select></label>
+        <div className="venue-form-grid"><label>E-pos<input name="email" type="email" defaultValue={editing === "new" ? "" : editing.email || ""} /></label><label>Selfoon<input name="mobile" inputMode="tel" defaultValue={editing === "new" ? "" : editing.mobile || ""} /></label></div>
+        <label>Status<select name="status" defaultValue={editing === "new" ? "active" : editing.status || "active"}><option value="active">Aktief</option><option value="pending_payment">Betaling wag</option><option value="inactive">Onaktief</option><option value="archived">Geargiveer</option></select></label>
+        <label>Notas<textarea name="notes" defaultValue={editing === "new" ? "" : editing.notes || ""} placeholder="Interne lidnota" /></label>
+        <label><input name="email_opt_out" type="checkbox" defaultChecked={editing !== "new" && Boolean(editing.email_opt_out)} /> Geen e-poskommunikasie</label>
+        <label><input name="whatsapp_opt_out" type="checkbox" defaultChecked={editing !== "new" && Boolean(editing.whatsapp_opt_out)} /> Geen WhatsApp-kommunikasie</label>
+        <button className="sheet-primary" disabled={saving}>{saving ? <RefreshCw className="spin" /> : <CheckCircle2 />}{saving ? "Stoor…" : "Stoor lid"}</button>
+        <button type="button" className="sheet-secondary" disabled={saving} onClick={() => setEditing(null)}>Kanselleer</button>
+      </form> : <>
+        <div className="venue-form-grid"><label>Soek lede<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Naam, e-pos of selfoon" /></label><button className="sheet-secondary compact-action" disabled={loading} onClick={() => void load()}><RefreshCw className={loading ? "spin" : ""} /> Soek</button></div>
+        <div className="module-status-grid"><section><strong>{members.length}</strong><ul><li>lede in hierdie lys</li><li>{groups.filter((group) => group.is_active).length} aktiewe groepe</li></ul></section><section><strong>{activeApplications.length}</strong><ul><li>lidmaatskapaansoeke wag nog</li><li>Faktuur- en betalingsaksies bly onder Finansies/Admin</li></ul></section></div>
+        <button className="sheet-primary" onClick={() => setEditing("new")}><UserPlus /> Voeg lid by</button>
+        {loading ? <p className="loading-line"><RefreshCw className="spin" /> Laai bestaande lidrekords…</p> : members.length ? <section className="staff-review-list">{members.map((member) => <article key={member.id} className="staff-review-card"><div className="staff-review-head"><div><small>{member.group_name || member.group_code || "Ledegroep"}</small><strong>{member.name}</strong><p>{member.email || "Geen e-pos"}{member.mobile ? ` · ${member.mobile}` : ""}</p></div><span data-status={member.status}>{member.status === "active" ? "Aktief" : serviceStatusLabel(member.status)}</span></div>{member.notes && <p className="staff-review-detail">{member.notes}</p>}<button className="app-secondary compact-action" onClick={() => setEditing(member)}>Wysig lid</button></article>)}</section> : <EmptyState icon={<Users />} title="Geen lede gevind nie" text="Verander die soekterm of voeg ’n lid by." />}
+      </>}
+      <button className="sheet-secondary" disabled={loading || saving} onClick={() => void load()}><RefreshCw className={loading ? "spin" : ""} /> Herlaai lidrekords</button>
+    </>}
+  </>;
 }
 
 function VendorProfilePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
