@@ -1890,11 +1890,13 @@ function pagePath(page: AppPage) {
 
 function AppModuleGroupCard({ group, onOpen, onOpenGroup }: { group: AppModuleGroup & { items: AppModule[] }; onOpen: (item: AppModule) => void; onOpenGroup: () => void }) {
   const GroupIcon = group.icon;
+  const [expanded, setExpanded] = useState(false);
   const previewItems = group.items.slice(0, 3);
-  const extraCount = Math.max(0, group.items.length - previewItems.length);
+  const extraItems = group.items.slice(3);
+  const extraCount = extraItems.length;
   return (
     <article className="module-group-card">
-      <button className="module-group-header" onClick={onOpenGroup}>
+      <button type="button" className="module-group-header" onClick={onOpenGroup}>
         <span className="module-icon">
           <GroupIcon />
         </span>
@@ -1908,9 +1910,17 @@ function AppModuleGroupCard({ group, onOpen, onOpenGroup }: { group: AppModuleGr
         {previewItems.map((item) => (
           <AppModuleCard key={item.key} item={item} onOpen={() => onOpen(item)} compact />
         ))}
+        {expanded && extraItems.map((item) => (
+          <AppModuleCard key={item.key} item={item} onOpen={() => onOpen(item)} compact />
+        ))}
         {extraCount > 0 && (
-          <button className="module-more-button" onClick={onOpenGroup}>
-            Wys nog {extraCount} opsie{extraCount === 1 ? "" : "s"} <ArrowRight />
+          <button
+            type="button"
+            className="module-more-button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((isExpanded) => !isExpanded)}
+          >
+            {expanded ? "Wys minder" : `Wys nog ${extraCount} opsie${extraCount === 1 ? "" : "s"}`} <ArrowRight />
           </button>
         )}
       </div>
