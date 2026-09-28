@@ -1245,8 +1245,33 @@ export default function HomePage() {
           password: form.get("password"),
         }),
       }, AUTH_TIMEOUT_MS);
-      await loadMe();
-      if (result.requires_verification) setView("verify");
+      // A successful staff login already carries a server-signed session. Show
+      // the operational dashboard immediately, then refresh the fuller identity
+      // (tickets, wallet and permissions) without holding the login button.
+      // Server routes still authenticate every later read/write independently.
+      if (result.user?.source === "staff") {
+        setMe({
+          ok: true,
+          user: {
+            id: Number(result.user.id),
+            name: String(result.user.name || "Personeel"),
+            email: null,
+            phone: null,
+            role: String(result.user.role || "staff"),
+            source: "staff",
+            verified: true,
+            permissions: [],
+          },
+          tickets: [],
+          wallets: [],
+          linkage: "staff_session_refreshing",
+        });
+        setView("welcome");
+        void loadMe();
+      } else {
+        await loadMe();
+        if (result.requires_verification) setView("verify");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Teken in het misluk");
     } finally {
