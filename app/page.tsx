@@ -2701,6 +2701,7 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
   const [message, setMessage] = useState("");
   const [lease, setLease] = useState<{ terminal_code: string; device_instance_id: string; lease_token: string; expires_at?: number } | null>(null);
   const [shiftReady, setShiftReady] = useState(false);
+  const [shiftId, setShiftId] = useState<string | null>(null);
   const [orderCode, setOrderCode] = useState("");
   const saleInFlight = useRef(false);
   const [hasPendingSale, setHasPendingSale] = useState(false);
@@ -2900,6 +2901,7 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
         group_id: currentLocation.group_id,
         location_id: currentLocation.id,
         terminal_code: lease.terminal_code,
+        shift_id: shiftId,
       };
       const order = await checkout.run(resume ? null : {
           ...common,
@@ -2976,7 +2978,7 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
       {lease && currentLocation && liveConfig?.event?.id && <POSShiftPanel
         key={`${userId}:${liveConfig.event.id}:${currentLocation.id}:${lease.terminal_code}:${lease.lease_token}`}
         userId={userId} context={{terminal_code:lease.terminal_code,location_id:currentLocation.id,event_id:liveConfig.event.id}}
-        lease={lease} disabled={Boolean(busy)} onReady={setShiftReady}
+        lease={lease} disabled={Boolean(busy)} onReady={(ready, shift) => { setShiftReady(ready); setShiftId(ready ? shift?.id || null : null); }}
       />}
       {error && <p className="form-error">{error}</p>}
       {message && <p className="success-note"><CheckCircle2 />{message}</p>}
@@ -3045,7 +3047,7 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
             </div>}
             {method === "event_balance" && <p className="payment-note">Die backend keer die sale indien die beursie nie genoeg balans het nie.</p>}
             {method === "yoco_webpos" && <p className="payment-note">Vereis ’n gekoppelde Yoco Web POS-toestel. Die verkoop voltooi eers nadat Yoco die betaling deur die backend bevestig het.</p>}
-            <button className="app-primary" type="button" disabled={!lease || !shiftReady || !basketLines.length || Boolean(busy) || hasPendingSale || (method === "yoco_manual" && (!manualCardConfirmed || !reference.trim()))} onClick={() => void completeSale()}>
+            <button className="app-primary" type="button" disabled={!lease || !shiftReady || !shiftId || !basketLines.length || Boolean(busy) || hasPendingSale || (method === "yoco_manual" && (!manualCardConfirmed || !reference.trim()))} onClick={() => void completeSale()}>
               {busy === "sale" ? <RefreshCw className="spin" /> : <ShieldCheck />}
               {busy === "sale" ? "Voltooi…" : `Voltooi sale · ${posMoney(total)}`}
             </button>

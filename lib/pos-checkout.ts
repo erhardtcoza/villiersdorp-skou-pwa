@@ -3,6 +3,7 @@ export type CheckoutDraft = {
   group_id?: number;
   location_id: number;
   terminal_code: string;
+  shift_id: string | null;
   customer_id: number | null;
   customer_name: string | null;
   customer_mobile: string | null;
@@ -77,7 +78,7 @@ export function createCheckout(storage: Storage, scope: string, api: Api) {
       const saved = journal.draft;
       if (saved.terminal_code !== lease.terminal_code) throw new Error('Hervat hierdie verkoop op die oorspronklike terminal.');
       const { method, provider_reference, manual_card_confirmed: _manualConfirmation, ...orderDraft } = saved;
-      const common = { ...lease, event_id: saved.event_id, group_id: saved.group_id, location_id: saved.location_id, terminal_code: saved.terminal_code };
+      const common = { ...lease, event_id: saved.event_id, group_id: saved.group_id, location_id: saved.location_id, terminal_code: saved.terminal_code, shift_id: saved.shift_id };
       const result = await api('/api/pos-v1/orders', { method: 'POST', body: JSON.stringify({ ...orderDraft, ...common, idempotency_key: `${saved.terminal_code}:app-order:${journal.key}` }) });
       const order = result.order;
       if (!order?.id) throw new Error('Die verkoop se bestelling kon nie bevestig word nie. Probeer hervat.');
@@ -122,7 +123,7 @@ export function createCheckout(storage: Storage, scope: string, api: Api) {
       journal.cancelReason = savedReason;
       storage.setItem(storageKey, JSON.stringify(journal));
       const saved = journal.draft;
-      const common = { ...lease, event_id: saved.event_id, group_id: saved.group_id, location_id: saved.location_id, terminal_code: saved.terminal_code };
+      const common = { ...lease, event_id: saved.event_id, group_id: saved.group_id, location_id: saved.location_id, terminal_code: saved.terminal_code, shift_id: saved.shift_id };
       const result = await api('/api/pos-v1/orders', { method: 'POST', body: JSON.stringify({ ...saved, ...common, idempotency_key: `${saved.terminal_code}:app-order:${journal.key}` }) });
       if (!result.order?.id) throw new Error('Die bestelling kon nie bevestig word nie. Probeer kanselleer weer.');
       try {

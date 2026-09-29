@@ -3,7 +3,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {api} from '../lib/app-api';
 import {openingFloatCents,shiftOpeningJournal,shiftStopJournal,validateOpenShift,validateStoppedShift,type POSShift,type ShiftContext,type ShiftLease,type PendingShiftStop} from '../lib/pos-shift';
 
-export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:number;context:ShiftContext;lease:ShiftLease;disabled:boolean;onReady:(ready:boolean)=>void}) {
+export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:number;context:ShiftContext;lease:ShiftLease;disabled:boolean;onReady:(ready:boolean,shift?:POSShift|null)=>void}) {
   const [shift,setShift]=useState<POSShift|null>(null);
   const [amount,setAmount]=useState('');
   const [pending,setPending]=useState(false);
@@ -21,7 +21,7 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
     if(inFlight.current)return;
     inFlight.current=true;
     const requestGeneration=generation.current;
-    setBusy(true);setError('');setLoaded(false);setShift(null);onReady(false);
+    setBusy(true);setError('');setLoaded(false);setShift(null);onReady(false,null);
     try{
       const savedStop=stopJournal.pending();setPendingStop(savedStop);if(savedStop)setStopReason(savedStop.reason);
       const result=await api('/api/pos-v1/shifts/current',{method:'POST',body:JSON.stringify(body)});
@@ -29,7 +29,7 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
       const current=result.shift===null?null:validateOpenShift(result.shift,userId,context);
       if(current){journal.clear();setPending(false);}
       else {const saved=journal.pending();setPending(Boolean(saved));if(saved)setAmount((saved.opening_float_cents/100).toFixed(2));}
-      setShift(current);setLoaded(true);onReady(Boolean(current)&&!savedStop);
+      setShift(current);setLoaded(true);onReady(Boolean(current)&&!savedStop,current);
     }catch(err){if(requestGeneration===generation.current)setError(err instanceof Error?err.message:'Skof kon nie gelaai word nie.');}
     finally{if(requestGeneration===generation.current){inFlight.current=false;setBusy(false);}}
   };
@@ -37,24 +37,24 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
     generation.current++;
     inFlight.current=false;
     const timer=window.setTimeout(()=>void refresh(),0);
-    return()=>{window.clearTimeout(timer);generation.current++;onReady(false);};
+    return()=>{window.clearTimeout(timer);generation.current++;onReady(false,null);};
   },[journal,lease.lease_token,lease.device_instance_id]);
   const open=async()=>{
     if(inFlight.current||busy||disabled||!loaded||pendingStop)return;
-    inFlight.current=true;setBusy(true);setError('');onReady(false);
+    inFlight.current=true;setBusy(true);setError('');onReady(false,null);
     const requestGeneration=generation.current;
     try{
       const entry=journal.prepare(openingFloatCents(amount));setPending(true);
       const result=await api('/api/pos-v1/shifts/open',{method:'POST',body:JSON.stringify({...body,...entry})});
       if(requestGeneration!==generation.current)return;
       const opened=validateOpenShift(result.shift,userId,context);
-      journal.clear();setPending(false);setShift(opened);onReady(true);
+      journal.clear();setPending(false);setShift(opened);onReady(true,opened);
     }catch(err){if(requestGeneration===generation.current)setError(err instanceof Error?err.message:'Skof kon nie oopgemaak word nie.');}
     finally{if(requestGeneration===generation.current){inFlight.current=false;setBusy(false);}}
   };
   const stop=async()=>{
     if(inFlight.current||busy||disabled||(!shift&&!pendingStop))return;
-    inFlight.current=true;setBusy(true);setError('');onReady(false);
+    inFlight.current=true;setBusy(true);setError('');onReady(false,null);
     const requestGeneration=generation.current;
     try{
       const entry=stopJournal.pending()||(shift?stopJournal.prepare(shift,stopReason):null);
