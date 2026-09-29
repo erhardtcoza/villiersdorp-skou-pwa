@@ -42,6 +42,8 @@ test('current request also ignores stale result and restores pending float for a
 test('PWA wires the shift panel and gates new checkout without blocking pending-payment recovery',()=>{
   const page=readFileSync(new URL('../app/page.tsx',import.meta.url),'utf8');
   assert.match(page,/<POSShiftPanel/);assert.match(page,/!resume && \(!basketLines.length \|\| !shiftReady\)/);
+  assert.match(page,/const \[, productResult\] = await Promise\.all\(\[/);
+  assert.match(page,/api\(\`\/api\/pos-v1\/products\?location_id=/);
   assert.match(page,/disabled=\{!lease \|\| Boolean\(busy\)\} onClick=\{\(\) => void completeSale\(true\)\}/);
   assert.doesNotMatch(source,/window\.location|href=/);
 });

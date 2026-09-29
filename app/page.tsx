@@ -2770,57 +2770,49 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
       return next;
     });
   };
-  const loadProducts = useCallback(async (id: number) => {
-    if (!id) return false;
-    setBusy("products");
-    setError("");
-    try {
-      const result = await api(`/api/pos-v1/products?location_id=${encodeURIComponent(id)}`);
-      setProducts(result.products || []);
-      setBasket({});
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Produkte kon nie gelaai word nie");
-      setProducts([]);
-      return false;
-    } finally {
-      setBusy("");
-    }
-  }, []);
   const prepareTerminal = useCallback(async (id: number, recoveryTerminal?: string) => {
     if (!id || effectiveDepartment.status !== "live") return false;
     setShiftReady(false);
+    setShiftId(null);
     setLease(null);
     setBusy("terminal");
     setError("");
     try {
+      // The bridge must finish first because it establishes the POS session.
+      // Product reading does not depend on terminal registration, so run it at
+      // the same time as the registration instead of adding another round trip.
       await api("/api/app/pos/bridge", {
         method: "POST",
         body: JSON.stringify({ target: "pos", pos_area: effectiveDepartment.area, location_id: id }),
       }, POS_BRIDGE_TIMEOUT_MS);
       const terminal_code = recoveryTerminal || getAppPosTerminal(effectiveDepartment.area);
       const device_instance_id = getPosDeviceId();
-      await api("/api/pos-v1/terminal/register", {
-        method: "POST",
-        body: JSON.stringify({
-          terminal_code,
-          device_name: `Skou App ${effectiveDepartment.title}`,
-          location_id: id,
-          mode: effectiveDepartment.area,
-          platform: "pwa",
-          user_agent: window.navigator.userAgent,
-          capabilities: { app_native_pos: true },
+      const [, productResult] = await Promise.all([
+        api("/api/pos-v1/terminal/register", {
+          method: "POST",
+          body: JSON.stringify({
+            terminal_code,
+            device_name: `Skou App ${effectiveDepartment.title}`,
+            location_id: id,
+            mode: effectiveDepartment.area,
+            platform: "pwa",
+            user_agent: window.navigator.userAgent,
+            capabilities: { app_native_pos: true },
+          }),
         }),
-      });
+        api(`/api/pos-v1/products?location_id=${encodeURIComponent(id)}`),
+      ]);
       const acquired = await api("/api/pos-v1/terminal/lease/acquire", {
         method: "POST",
         body: JSON.stringify({ terminal_code, device_instance_id, force: false }),
       });
-      const loaded = await loadProducts(id);
-      setLease(loaded ? { terminal_code, device_instance_id, lease_token: acquired.lease_token, expires_at: acquired.expires_at } : null);
-      return loaded;
+      setProducts(productResult.products || []);
+      setBasket({});
+      setLease({ terminal_code, device_instance_id, lease_token: acquired.lease_token, expires_at: acquired.expires_at });
+      return true;
     } catch (err) {
       const raw = err instanceof Error ? err.message : "POS kon nie binne die app voorberei word nie";
+      setProducts([]);
       setError(raw.startsWith("terminal_mapping_in_use_finish_sale_and_release")
         ? "Hierdie terminaal is nog in gebruik of het ’n onafgehandelde verkoop. Voltooi die verkoop en stel die sessie vry voordat jy ligging verander."
         : raw);
@@ -2828,7 +2820,7 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
     } finally {
       setBusy("");
     }
-  }, [effectiveDepartment.area, effectiveDepartment.status, effectiveDepartment.title, loadProducts]);
+  }, [effectiveDepartment.area, effectiveDepartment.status, effectiveDepartment.title]);
   const changeLocation = async (id: number) => {
     if (!id || id === locationId || saleInFlight.current || busy) return;
     saleInFlight.current = true;
