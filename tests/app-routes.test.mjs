@@ -11,6 +11,7 @@ const appShellRoutes = [
   "app/perde/page.tsx",
   "app/horses/page.tsx",
   "app/pos/page.tsx",
+  "app/pos-test/page.tsx",
   "app/terreinbesprekings/page.tsx",
   "app/verhurings/page.tsx",
 ];
@@ -45,6 +46,7 @@ test("app deep links map to the intended grouped workflow pages", async () => {
   assert.match(source, /if \(pathname === "\/terreinbesprekings"\) return "venues"/);
   assert.match(source, /if \(pathname === "\/kroeg"\) return "bar"/);
   assert.match(source, /if \(pathname === "\/pos"\) return "pos"/);
+  assert.match(source, /if \(pathname === "\/pos-test"\) return "pos"/);
   assert.match(source, /if \(pathname === "\/perde" \|\| pathname === "\/horses"\) return "horses"/);
   assert.match(source, /if \(pathname === "\/verhurings"\) return "rentals"/);
   assert.match(source, /if \(page === "horses"\) return "\/perde"/);
@@ -74,7 +76,7 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /api\(`\/api\/public\/vendors/);
   assert.match(source, /api\("\/api\/app\/photos"/);
   assert.match(source, /form\.set\("file",\s*file\)/);
-  assert.match(source, /import \{ api \} from "\.\.\/lib\/app-api"/);
+  assert.match(source, /import \{ api(?:, appApiPath)? \} from "\.\.\/lib\/app-api"/);
   assert.match(source, /<MessagesPanel user=\{user\} \/>/);
   assert.match(source, /api\("\/api\/app\/messages\/contacts"\)/);
   assert.match(source, /api\("\/api\/app\/messages"\)/);
@@ -217,7 +219,7 @@ test("bar refund clients surface backend failures and reuse refund keys while bu
   const nativeSource = await readFile(path.join(root, "mobile/App.tsx"), "utf8");
 
   // HTTP errors, reference IDs and multipart handling are executed in app-api.test.mjs.
-  assert.match(webSource, /import \{ api \} from "\.\.\/lib\/app-api"/);
+  assert.match(webSource, /import \{ api(?:, appApiPath)? \} from "\.\.\/lib\/app-api"/);
   assert.match(webSource, /useState\(hasAnyPermission\(user, \["bar_refunds"\]\)\)/);
   assert.match(webSource, /refundJournal\.run\(orderId, draft\)/);
   assert.match(webSource, /Hervat oorspronklike refund/);

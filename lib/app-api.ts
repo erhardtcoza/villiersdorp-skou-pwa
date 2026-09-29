@@ -1,5 +1,14 @@
 // Shared browser API deadline covers both headers and JSON body consumption.
 // A timeout is an unknown write outcome, not proof that a financial action failed.
+//
+// The production app has one deliberately isolated POS acceptance route.  Its
+// API prefix is interpreted only by the PWA worker and never changes the
+// normal production API origin.
+export function appApiPath(path: string, pathname = typeof window === "undefined" ? "" : window.location.pathname) {
+  if (!path.startsWith("/api/")) return path;
+  return pathname === "/pos-test" || pathname.startsWith("/pos-test/") ? `/pos-test${path}` : path;
+}
+
 export async function api(path: string, init?: RequestInit, timeoutMs = 20000) {
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -16,7 +25,7 @@ export async function api(path: string, init?: RequestInit, timeoutMs = 20000) {
   if (!(init?.body instanceof FormData) && !headers.has("content-type")) headers.set("content-type", "application/json");
   try {
     return await Promise.race([deadline, (async () => {
-      const response = await fetch(path, { ...init, credentials: "same-origin", signal: controller.signal, headers });
+      const response = await fetch(appApiPath(path), { ...init, credentials: "same-origin", signal: controller.signal, headers });
       const data = await response.json().catch((err) => {
         if (controller.signal.aborted) throw err;
         return { ok: false, error: "Die bediener het nie korrek geantwoord nie" };

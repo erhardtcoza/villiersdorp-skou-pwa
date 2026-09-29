@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { api } from "../lib/app-api.ts";
+import { api, appApiPath } from "../lib/app-api.ts";
+
+test("POS test mode prefixes only internal API calls", () => {
+  assert.equal(appApiPath("/api/app/me", "/pos-test"), "/pos-test/api/app/me");
+  assert.equal(appApiPath("/api/pos-v1/orders", "/pos-test/"), "/pos-test/api/pos-v1/orders");
+  assert.equal(appApiPath("/api/app/me", "/"), "/api/app/me");
+  assert.equal(appApiPath("/pos/checkout", "/pos-test"), "/pos/checkout");
+});
 
 test("app API times out while waiting for JSON after headers", async t => {
   let signal;

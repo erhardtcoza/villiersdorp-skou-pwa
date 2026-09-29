@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createCheckout, PendingWebPOS } from "../lib/pos-checkout";
 import { changePOSLocation, initialPOSContext } from "../lib/pos-location-change";
-import { api } from "../lib/app-api";
+import { api, appApiPath } from "../lib/app-api";
 import { createRefundJournal, refundOutcome, type PendingRefund, type RefundDraft } from "../lib/refund-journal";
 import { currentTicketEvent } from "../lib/current-ticket-event";
 import { GateCamera } from "../components/gate-camera";
@@ -1160,7 +1160,7 @@ export default function HomePage() {
   };
   const loadHealth = async () => {
     try {
-      const response = await fetch("/api/app/health", { cache: "no-store" });
+      const response = await fetch(appApiPath("/api/app/health"), { cache: "no-store" });
       const data = await response.json().catch(() => null) as AppHealth | null;
       setHealth(data && typeof data.ok === "boolean" ? data : { ok: false });
     } catch {
@@ -1889,6 +1889,7 @@ function pageFromBrowserPath(pathname: string): AppPage {
   if (pathname === "/terreinbesprekings") return "venues";
   if (pathname === "/kroeg") return "bar";
   if (pathname === "/pos") return "pos";
+  if (pathname === "/pos-test") return "pos";
   if (pathname === "/perde" || pathname === "/horses") return "horses";
   if (pathname === "/verhurings") return "rentals";
   return "home";
@@ -1904,6 +1905,7 @@ function moduleFromBrowserQuery(search: string) {
 }
 
 function pagePath(page: AppPage) {
+  if (typeof window !== "undefined" && (window.location.pathname === "/pos-test" || window.location.pathname.startsWith("/pos-test/"))) return "/pos-test?module=pos";
   if (page === "tickets") return "/kaartjies";
   if (page === "venues") return "/terreinbesprekings";
   if (page === "bar") return "/kroeg";

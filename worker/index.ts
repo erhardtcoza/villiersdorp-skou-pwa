@@ -7,6 +7,7 @@ import { fetchHealthJson } from "./health-fetch";
 
 interface Env {
   DEV_BACKEND?: Fetcher;
+  POS_TEST_BACKEND?: Fetcher;
   ASSETS: Fetcher;
   DB: D1Database;
   IMAGES: {
@@ -16,6 +17,40 @@ interface Env {
       };
     };
   };
+}
+
+function isPosTestPath(pathname: string) {
+  return pathname === "/pos-test" || pathname.startsWith("/pos-test/");
+}
+
+function posTestRequestHeaders(headers: Headers) {
+  const rewritten = new Headers(headers);
+  const cookie = rewritten.get("cookie");
+  if (cookie) {
+    const testCookie = "vs_pos_test_sess=";
+    const ordinaryCookie = "vs_app_sess=";
+    const upstreamCookie = cookie
+      .split(/;\s*/)
+      .filter((part) => !part.startsWith(ordinaryCookie))
+      .map((part) => part.startsWith(testCookie) ? `${ordinaryCookie}${part.slice(testCookie.length)}` : part)
+      .join("; ");
+    if (upstreamCookie) rewritten.set("cookie", upstreamCookie);
+    else rewritten.delete("cookie");
+  }
+  return rewritten;
+}
+
+function posTestResponseHeaders(headers: Headers) {
+  const rewritten = new Headers(headers);
+  const setCookie = rewritten.get("set-cookie");
+  if (setCookie) {
+    rewritten.set("set-cookie", setCookie
+      .replace(/(^|,\s*)vs_app_sess=/g, "$1vs_pos_test_sess=")
+      .replace(/;\s*Path=\//gi, "; Path=/pos-test"));
+  }
+  rewritten.set("cache-control", "no-store");
+  rewritten.set("x-robots-tag", "noindex, nofollow, noarchive");
+  return rewritten;
 }
 
 interface ExecutionContext {
@@ -47,6 +82,23 @@ async function proxyBackend(request: Request, upstreamPath?: string, env?: Env):
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers: proxiedHeaders });
 }
 
+async function proxyPosTestBackend(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const upstreamPath = `${url.pathname.slice("/pos-test".length)}${url.search}`;
+  const upstream = new URL(upstreamPath, "https://skou-events-staging.vinetis.workers.dev");
+  const headers = posTestRequestHeaders(request.headers);
+  headers.set("host", upstream.host);
+  const upstreamRequest = new Request(upstream, {
+    method: request.method,
+    headers,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    redirect: "manual",
+  });
+  if (!env.POS_TEST_BACKEND) return new Response(JSON.stringify({ ok: false, error: "POS-toetsmodus is nie beskikbaar nie." }), { status: 503, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+  const response = await env.POS_TEST_BACKEND.fetch(upstreamRequest);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers: posTestResponseHeaders(response.headers) });
+}
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -62,6 +114,8 @@ const worker = {
     if (isDevelopment && url.pathname === "/robots.txt") {
       return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": "noindex, nofollow" } });
     }
+
+    if (url.pathname.startsWith("/pos-test/api/")) return proxyPosTestBackend(request, env);
 
     if (url.pathname === "/api/app/health") {
       const checkedAt = new Date().toISOString();
@@ -169,6 +223,12 @@ const worker = {
     }
 
     const rendered = await handler.fetch(request, env, ctx);
+    if (isPosTestPath(url.pathname)) {
+      const testHeaders = new Headers(rendered.headers);
+      testHeaders.set("cache-control", "no-store");
+      testHeaders.set("x-robots-tag", "noindex, nofollow, noarchive");
+      return new Response(rendered.body, { status: rendered.status, statusText: rendered.statusText, headers: testHeaders });
+    }
     if (!isDevelopment) return rendered;
     const previewHeaders = new Headers(rendered.headers);
     previewHeaders.set("x-robots-tag", "noindex, nofollow, noarchive");
