@@ -2867,6 +2867,34 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveDepartment.area, effectiveDepartment.primary_location_id, configLoading, locations.length]);
+  useEffect(() => {
+    if (!lease) return;
+    const held = lease;
+    let active = true;
+    const heartbeat = async () => {
+      try {
+        const result = await api("/api/pos-v1/terminal/lease/heartbeat", {
+          method: "POST",
+          body: JSON.stringify(held),
+        });
+        if (active && Number.isFinite(Number(result.expires_at))) {
+          setLease((current) => current?.lease_token === held.lease_token
+            ? { ...current, expires_at: Number(result.expires_at) }
+            : current);
+        }
+      } catch {
+        if (active) {
+          setLease(null);
+          setShiftReady(false);
+          setShiftId(null);
+          setError("Terminale verbinding verloor. Herstel dit voordat jy voortgaan.");
+        }
+      }
+    };
+    const timer = window.setInterval(() => { void heartbeat(); }, 25_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [lease?.terminal_code, lease?.device_instance_id, lease?.lease_token]);
+
   const searchCustomers = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (customerQuery.trim().length < 2) return;
