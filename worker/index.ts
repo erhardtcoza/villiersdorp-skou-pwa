@@ -2,7 +2,7 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import type { D1Database, Fetcher } from "@cloudflare/workers-types";
-import { backendOrigin as resolveBackendOrigin } from "../lib/backend-origin";
+import { backendOrigin as resolveBackendOrigin, usesBoundDevelopmentBackend } from "../lib/backend-origin";
 import { fetchHealthJson } from "./health-fetch";
 
 interface Env {
@@ -26,6 +26,7 @@ interface ExecutionContext {
 async function proxyBackend(request: Request, upstreamPath?: string, env?: Env): Promise<Response> {
   const url = new URL(request.url);
   const backendOrigin = resolveBackendOrigin(request.url);
+  const usesBoundBackend = usesBoundDevelopmentBackend(request.url);
   const upstream = new URL(upstreamPath || `${url.pathname}${url.search}`, backendOrigin);
   const headers = new Headers(request.headers);
   headers.set("host", upstream.host);
@@ -35,7 +36,7 @@ async function proxyBackend(request: Request, upstreamPath?: string, env?: Env):
     body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
     redirect: "manual",
   });
-  const response = await (backendOrigin.includes("skou-events-dev.") && env?.DEV_BACKEND ? env.DEV_BACKEND.fetch(upstreamRequest) : fetch(upstreamRequest));
+  const response = await (usesBoundBackend && env?.DEV_BACKEND ? env.DEV_BACKEND.fetch(upstreamRequest) : fetch(upstreamRequest));
   const proxiedHeaders = new Headers(response.headers);
   proxiedHeaders.set("cache-control", "no-store");
   const location = proxiedHeaders.get("location");
@@ -56,7 +57,8 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const backendOrigin = resolveBackendOrigin(request.url);
-    const isDevelopment = backendOrigin.includes("skou-events-dev.");
+    const isDevelopment = backendOrigin !== "https://tickets.villiersdorpskou.co.za";
+    const usesBoundBackend = usesBoundDevelopmentBackend(request.url);
     if (isDevelopment && url.pathname === "/robots.txt") {
       return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": "noindex, nofollow" } });
     }
@@ -81,7 +83,7 @@ const worker = {
       };
 
       try {
-        const transport = (probe: Request) => isDevelopment && env.DEV_BACKEND ? env.DEV_BACKEND.fetch(probe) : fetch(probe);
+        const transport = (probe: Request) => usesBoundBackend && env.DEV_BACKEND ? env.DEV_BACKEND.fetch(probe) : fetch(probe);
         const [backendHealth, publicHealth] = await Promise.all([
           fetchHealthJson(`${backendOrigin}/api/app/health`, transport),
           fetchHealthJson(`${backendOrigin}/api/public/health`, transport),

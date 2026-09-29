@@ -20,4 +20,6 @@ enabled = true
 
 [[services]]
 binding = "DEV_BACKEND"
-service = "skou-events-dev"
+# The dev PWA is the staffed POS V1 acceptance surface. It deliberately uses
+# the isolated staging backend and never production ticket data.
+service = "skou-events-staging"

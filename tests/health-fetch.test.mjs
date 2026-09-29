@@ -13,6 +13,7 @@ async function healthRoute(catalogueStatus) {
   const calls = [];
   const context = vm.createContext({ Request, Response, URL, Headers, fetchHealthJson,
     resolveBackendOrigin: () => 'https://dev.invalid',
+    usesBoundDevelopmentBackend: () => false,
     fetch: async request => {
       calls.push(new URL(request.url).pathname);
       return new Response(JSON.stringify(request.url.includes('/public/')
