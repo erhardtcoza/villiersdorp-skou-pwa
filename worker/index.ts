@@ -9,6 +9,7 @@ import { walletCardPage } from "./wallet-card";
 interface Env {
   DEV_BACKEND?: Fetcher;
   POS_TEST_BACKEND?: Fetcher;
+  WALLET_BACKEND_ORIGIN?: string;
   ASSETS: Fetcher;
   DB: D1Database;
   IMAGES: {
@@ -109,7 +110,7 @@ async function proxyPosTestBackend(request: Request, env: Env): Promise<Response
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/n/") || url.hostname === "wallet.villiersdorpskou.co.za") return walletCardPage(request);
+    if (url.pathname.startsWith("/n/") || url.hostname === "wallet.villiersdorpskou.co.za") return walletCardPage(request, env.WALLET_BACKEND_ORIGIN);
     const backendOrigin = resolveBackendOrigin(request.url);
     const isDevelopment = backendOrigin !== "https://tickets.villiersdorpskou.co.za";
     const usesBoundBackend = usesBoundDevelopmentBackend(request.url);

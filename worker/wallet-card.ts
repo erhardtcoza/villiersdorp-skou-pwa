@@ -1,9 +1,17 @@
 /** Public NFC landing page. Never resolves a card credential without staff authentication. */
-export function walletCardPage(request: Request): Response {
+function customerOrigin(value?: string): string {
+  try {
+    const origin = new URL(value || "https://tickets.villiersdorpskou.co.za").origin;
+    return origin.startsWith("https://") ? origin : "https://tickets.villiersdorpskou.co.za";
+  } catch { return "https://tickets.villiersdorpskou.co.za"; }
+}
+
+export function walletCardPage(request: Request, configuredCustomerOrigin?: string): Response {
   const path = new URL(request.url).pathname;
   const valid = path === "/" || /^\/n\/VSW2\.[A-Za-z0-9_-]{43}$/.test(path);
   const token = path.match(/^\/n\/(VSW2\.[A-Za-z0-9_-]{43})$/)?.[1];
-  const customerLink = token ? `https://tickets.villiersdorpskou.co.za/connect-card#${token}` : "https://app.villiersdorpskou.co.za/?module=wallet";
+  const backend = customerOrigin(configuredCustomerOrigin);
+  const customerLink = token ? `${backend}/connect-card#${token}` : `${backend}/my-wallet`;
   const headers = {
     "content-type": "text/html; charset=utf-8",
     "cache-control": "no-store",

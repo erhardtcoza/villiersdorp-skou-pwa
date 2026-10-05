@@ -15,6 +15,9 @@ globs = ["**/*.js", "**/*.mjs"]
 directory = "dist/client"
 binding = "ASSETS"
 
+[vars]
+WALLET_BACKEND_ORIGIN = "https://skou-events-dev.vinetis.workers.dev"
+
 [observability.logs]
 enabled = true
 

@@ -24,6 +24,11 @@ test('public NFC landing page keeps the opaque token only in the customer-side f
   assert.match(body, /aanvul/i);
 });
 
+test('configured development customer origin stays isolated from production', async () => {
+  const response = page(new Request(`https://wallet.example/n/${token}`), 'https://skou-events-dev.vinetis.workers.dev');
+  assert.match(await response.text(), new RegExp(`https://skou-events-dev\.vinetis\.workers\.dev/connect-card#${token}`));
+});
+
 test('invalid and write NFC landing requests cannot reveal or mutate a card', async () => {
   const malformed = page(new Request('https://wallet.villiersdorpskou.co.za/n/not-a-token'));
   assert.equal(malformed.status, 404);
@@ -37,6 +42,6 @@ test('invalid and write NFC landing requests cannot reveal or mutate a card', as
 test('worker routes the dedicated wallet hostname and NFC path before app or backend handling', async () => {
   const workerSource = await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8');
   assert.match(workerSource, /url\.pathname\.startsWith\("\/n\/"\) \|\| url\.hostname === "wallet\.villiersdorpskou\.co\.za"/);
-  assert.match(workerSource, /return walletCardPage\(request\);/);
+  assert.match(workerSource, /return walletCardPage\(request, env\.WALLET_BACKEND_ORIGIN\);/);
   assert.match(workerSource, /if \(isBackendPage \|\| isBackendMedia \|\| isBackendApi\)/);
 });
