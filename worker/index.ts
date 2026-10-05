@@ -76,6 +76,10 @@ async function proxyBackend(request: Request, upstreamPath?: string, env?: Env):
   const response = await (usesBoundBackend && env?.DEV_BACKEND ? env.DEV_BACKEND.fetch(upstreamRequest) : fetch(upstreamRequest));
   const proxiedHeaders = new Headers(response.headers);
   proxiedHeaders.set("cache-control", "no-store");
+  // API responses can contain operational or account-specific state, including
+  // scanner denials. Preserve the backend's status/body but never expose any
+  // proxied API endpoint to search indexing.
+  if (url.pathname.startsWith("/api/")) proxiedHeaders.set("x-robots-tag", "noindex, nofollow, noarchive, nosnippet");
   const location = proxiedHeaders.get("location");
   if (location) {
     const rewritten = location.startsWith(backendOrigin) ? location.slice(backendOrigin.length) || "/" : location;

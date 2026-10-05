@@ -263,5 +263,6 @@ test("app worker keeps POS V1 APIs but redirects legacy POS pages back into the 
   assert.match(workerSource, /url\.pathname\.startsWith\("\/scan\/"\)/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/media\/"\)/);
   assert.match(workerSource, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(workerSource, /url\.pathname\.startsWith\("\/api\/"\)[\s\S]{0,100}proxiedHeaders\.set\("x-robots-tag", "noindex, nofollow, noarchive, nosnippet"\)/);
   assert.match(workerSource, /proxiedHeaders\.set\("location",\s*rewritten\)/);
 });
