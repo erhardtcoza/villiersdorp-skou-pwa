@@ -21,7 +21,8 @@ test('public NFC landing page keeps the opaque token only in the customer-side f
   assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
   assert.match(body, new RegExp(`connect-card#${token}`));
   assert.doesNotMatch(body, /api\/card-desk|api\/customer-wallet|balance_cents/);
-  assert.match(body, /aanvul/i);
+  assert.match(body, /Laai kaart of koppel beursie/);
+  assert.match(body, /net.*aktiveringskode/i);
 });
 
 test('configured development customer origin stays isolated from production', async () => {
