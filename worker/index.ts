@@ -4,6 +4,7 @@ import handler from "vinext/server/app-router-entry";
 import type { D1Database, Fetcher } from "@cloudflare/workers-types";
 import { backendOrigin as resolveBackendOrigin, usesBoundDevelopmentBackend } from "../lib/backend-origin";
 import { fetchHealthJson } from "./health-fetch";
+import { walletCardPage } from "./wallet-card";
 
 interface Env {
   DEV_BACKEND?: Fetcher;
@@ -108,6 +109,7 @@ async function proxyPosTestBackend(request: Request, env: Env): Promise<Response
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/n/") || url.hostname === "wallet.villiersdorpskou.co.za") return walletCardPage(request);
     const backendOrigin = resolveBackendOrigin(request.url);
     const isDevelopment = backendOrigin !== "https://tickets.villiersdorpskou.co.za";
     const usesBoundBackend = usesBoundDevelopmentBackend(request.url);

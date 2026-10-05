@@ -14,6 +14,10 @@ globs = ["**/*.js", "**/*.mjs"]
 pattern = "app.villiersdorpskou.co.za"
 custom_domain = true
 
+[[routes]]
+pattern = "wallet.villiersdorpskou.co.za"
+custom_domain = true
+
 [assets]
 directory = "dist/client"
 binding = "ASSETS"

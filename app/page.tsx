@@ -57,6 +57,38 @@ type AppWallet = {
   version?: number;
   status: string;
 };
+type WebNdefReader = {
+  scan(): Promise<void>;
+  write(message: unknown): Promise<void>;
+  addEventListener(type: string, listener: (event: unknown) => void, options?: { once?: boolean }): void;
+};
+type WebNdefReaderConstructor = new () => WebNdefReader;
+
+function nfcReaderConstructor(): WebNdefReaderConstructor | null {
+  if (typeof window === "undefined") return null;
+  return (window as unknown as { NDEFReader?: WebNdefReaderConstructor }).NDEFReader || null;
+}
+
+function makeWalletCardToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `VSW2.${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")}`;
+}
+
+function tokenFromNfcRecord(event: unknown) {
+  const records = (event as { message?: { records?: Array<{ data?: DataView | ArrayBuffer | string | null }> } })?.message?.records || [];
+  for (const record of records) {
+    let value = "";
+    if (typeof record.data === "string") value = record.data;
+    else if (record.data instanceof DataView) value = new TextDecoder().decode(record.data.buffer);
+    else if (record.data instanceof ArrayBuffer) value = new TextDecoder().decode(record.data);
+    const match = value.match(/VSW2\.[A-Za-z0-9_-]{43}/);
+    if (match) return match[0];
+  }
+  return null;
+}
 type TicketType = {
   id: number;
   name: string;
@@ -4258,6 +4290,10 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
   const [cardCancelReason,setCardCancelReason]=useState('');
   const [query, setQuery] = useState("");
   const [wallet, setWallet] = useState<AppWallet | null>(null);
+  const [cardLabel, setCardLabel] = useState("");
+  const [cardCode, setCardCode] = useState("");
+  const [pendingNfcToken, setPendingNfcToken] = useState<string | null>(null);
+  const [nfcSupported, setNfcSupported] = useState(false);
   const [newName, setNewName] = useState("");
   const [newMobile, setNewMobile] = useState("");
   const [amount, setAmount] = useState(10000);
@@ -4268,6 +4304,7 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
   const [message, setMessage] = useState("");
   useEffect(()=>{
     mounted.current=true;
+    setNfcSupported(Boolean(nfcReaderConstructor()));
     void (async()=>{try{
       const saved=journal.pending();
       const savedCard=cardJournal.pending();
@@ -4292,7 +4329,12 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
       await api('/api/pos-v1/terminal/register',{method:'POST',body:JSON.stringify({terminal_code,location_id:locationId,event_id:config.event.id,mode:area,platform:'pwa',device_name:'Skou App beursie'})});
       const acquired=await api('/api/pos-v1/terminal/lease/acquire',{method:'POST',body:JSON.stringify({terminal_code,device_instance_id,force:false})});
       if(mounted.current)setLease({terminal_code,device_instance_id,lease_token:acquired.lease_token});
-    }catch(err){if(mounted.current)setError(err instanceof Error?err.message:'Terminale verbinding het misluk.');}
+    }catch(err){if(mounted.current){
+      const raw=err instanceof Error?err.message:'Terminale verbinding het misluk.';
+      setError(raw.startsWith('terminal_mapping_in_use_finish_sale_and_release')
+        ? 'Die gekose kassierterminaal het nog ’n oop skof of onafgehandelde verkoop. Dit blokkeer nie die skoukaart nie: jy kan steeds die beursie skep en ’n kaart koppel. Voltooi of kanselleer die ou toetsverkoop voordat jy geld laai.'
+        : raw);
+    }}
     finally{inFlight.current=false;if(mounted.current)setBusy('');}
   };
   useEffect(()=>{
@@ -4317,6 +4359,72 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
     } finally {
       setBusy("");
     }
+  };
+  const loadNfcCard = async (token: string) => {
+    const result = await api("/api/app/staff/wallets/lookup-card", { method: "POST", body: JSON.stringify({ token }) });
+    setWallet(result.wallet);
+    setQuery(result.wallet?.id || "");
+    setMessage("Skoukaart gelees. Beursie gelaai.");
+  };
+  const scanNfcCard = async () => {
+    if (inFlight.current || busy || pending || cardPending) return;
+    const Reader = nfcReaderConstructor();
+    if (!Reader) { setError("Hierdie toestel ondersteun nie NFC in die web-app nie. Gebruik die kaartkode vanaf ’n USB-leser hieronder."); return; }
+    inFlight.current = true;
+    setBusy("nfc-scan"); setError(""); setMessage("Hou die skoukaart teen die toestel.");
+    try {
+      const reader = new Reader();
+      await reader.scan();
+      const token = await new Promise<string>((resolve, reject) => {
+        const timeout = window.setTimeout(() => reject(new Error("Geen skoukaart is binne 20 sekondes gelees nie.")), 20000);
+        reader.addEventListener("reading", (event) => {
+          window.clearTimeout(timeout);
+          const readToken = tokenFromNfcRecord(event);
+          if (readToken) resolve(readToken);
+          else reject(new Error("Die kaart bevat nie ’n geldige Skou-kaartkode nie."));
+        }, { once: true });
+      });
+      await loadNfcCard(token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Skoukaart kon nie gelees word nie.");
+    } finally { inFlight.current = false; setBusy(""); }
+  };
+  const linkNfcCard = async () => {
+    if (inFlight.current || busy || pending || cardPending || !wallet?.id) return;
+    const Reader = nfcReaderConstructor();
+    if (!Reader) { setError("Hierdie toestel ondersteun nie NFC-skryf in die web-app nie. Gebruik ’n Android NFC-toestel of ’n USB NFC-leser."); return; }
+    inFlight.current = true;
+    setBusy("nfc-write"); setError(""); setMessage("Hou ’n leë kaart teen die toestel om dit te skryf.");
+    try {
+      const token = makeWalletCardToken();
+      const reader = new Reader();
+      await reader.write({ records: [{ recordType: "url", data: `https://wallet.villiersdorpskou.co.za/n/${token}` }] });
+      setPendingNfcToken(token);
+      await registerNfcCard(token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Skoukaart kon nie geskryf en gekoppel word nie. Hou die kaart byderhand en hervat die koppeling.");
+    } finally { inFlight.current = false; setBusy(""); }
+  };
+  const registerNfcCard = async (token: string) => {
+    if (!wallet?.id) throw new Error("Laai eers die beursie voordat jy die kaart koppel.");
+    const result = await api(`/api/app/staff/wallets/${encodeURIComponent(wallet.id)}/credentials`, { method: "POST", body: JSON.stringify({ token, label: cardLabel.trim() }) });
+    setPendingNfcToken(null); setCardLabel(""); setCardCode("");
+    setMessage(`Skoukaart ${result.credential?.label || ""} is veilig aan ${wallet.name || wallet.id} gekoppel.`.trim());
+  };
+  const retryNfcLink = async () => {
+    if (!pendingNfcToken || inFlight.current || busy) return;
+    inFlight.current = true; setBusy("nfc-link"); setError("");
+    try { await registerNfcCard(pendingNfcToken); }
+    catch (err) { setError(err instanceof Error ? err.message : "Kaartkoppeling kon nie bevestig word nie."); }
+    finally { inFlight.current = false; setBusy(""); }
+  };
+  const loadManualCard = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (inFlight.current || busy || !cardCode.trim()) return;
+    inFlight.current = true; setBusy("card-code"); setError(""); setMessage("");
+    try { await loadNfcCard(cardCode.trim()); }
+    catch (err) { setError(err instanceof Error ? err.message : "Skoukaart kon nie gelaai word nie."); }
+    finally { inFlight.current = false; setBusy(""); }
   };
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -4417,13 +4525,6 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
       <span className="detail-icon"><WalletCards /></span>
       <p className="eyebrow">POS beursie</p>
       <h2>Beursie aanvulling</h2>
-      <section className="topup-panel">
-        <label>Kassierligging<select value={locationId} disabled={Boolean(lease)||Boolean(busy)||Boolean(pending)||Boolean(cardPending)||!restored} onChange={e=>setLocationId(Number(e.target.value))}>
-          <option value={0}>Kies ligging</option>{config?.locations?.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
-        </select></label>
-        <button className="app-secondary" disabled={!restored||!locationId||Boolean(busy)||Boolean(lease)||Boolean(cardPending)} onClick={()=>void prepare()}>Herstel / verbind kassierterminaal</button>
-      </section>
-      {lease&&config?.event?.id&&<POSShiftPanel userId={userId} context={{terminal_code:lease.terminal_code,location_id:locationId,event_id:config.event.id}} lease={lease} disabled={Boolean(busy)||Boolean(pending)||Boolean(cardPending)} onReady={setShiftReady}/>}
       {pending&&<section className="provider-note"><strong>Aanvulling wag op bevestiging</strong><p>Beursie {pending.wallet_id} · R {(pending.amount_cents/100).toFixed(2)}. Moenie weer kontant aanvaar nie.</p><button className="app-primary" disabled={!lease||Boolean(busy)} onClick={()=>void topup()}>Hervat dieselfde aanvulling</button></section>}
       {cardPending&&<section className="topup-panel" aria-label="Hangende kaartaanvulling">
         <strong>Kaartaanvulling wag op bevestiging</strong>
@@ -4452,6 +4553,17 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
         </button>
       </form>
 
+      <section className="topup-panel">
+        <strong>Lees ’n skoukaart</strong>
+        {nfcSupported ? <button className="app-secondary" type="button" disabled={Boolean(busy)||Boolean(pending)||Boolean(cardPending)} onClick={() => void scanNfcCard()}>{busy === "nfc-scan" ? <RefreshCw className="spin" /> : <ScanLine />}{busy === "nfc-scan" ? "Wag vir kaart…" : "Tik skoukaart"}</button> : <p className="payment-note">NFC-weblees is nie op hierdie toestel beskikbaar nie. ’n USB NFC-leser kan die kaartkode in die veld hieronder invoer.</p>}
+        <form onSubmit={loadManualCard}>
+          <label>Kaartkode vanaf leser
+            <input value={cardCode} onChange={(event) => setCardCode(event.target.value)} placeholder="VSW2.…" autoCapitalize="none" autoCorrect="off" />
+          </label>
+          <button className="text-button" disabled={Boolean(busy)||!cardCode.trim()}>{busy === "card-code" ? "Laai…" : "Laai kaartkode"}</button>
+        </form>
+      </section>
+
       <form className="topup-panel" onSubmit={create}>
         <strong>Skep nuwe beursie</strong>
         <label>Naam
@@ -4475,6 +4587,24 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
             </div>
             <span>R {(wallet.balance_cents / 100).toFixed(2)}</span>
           </div>
+          <div className="topup-panel">
+            <strong>Koppel ’n NFC-skoukaart</strong>
+            <label>Kaartetiket (opsioneel)
+              <input value={cardLabel} maxLength={120} onChange={(event) => setCardLabel(event.target.value)} placeholder="bv. CARD-001" />
+            </label>
+            <button className="app-secondary" type="button" disabled={Boolean(busy)||Boolean(pending)||Boolean(cardPending)} onClick={() => void linkNfcCard()}>{busy === "nfc-write" ? <RefreshCw className="spin" /> : <WalletCards />}{busy === "nfc-write" ? "Skryf en koppel…" : "Skryf en koppel NFC-kaart"}</button>
+            {pendingNfcToken && <button className="text-button" type="button" disabled={Boolean(busy)} onClick={() => void retryNfcLink()}>{busy === "nfc-link" ? "Koppel…" : "Hervat kaartkoppeling"}</button>}
+            <small className="payment-note">Die kaart bevat net ’n ewekansige Skou-kaartkode. Balans, persoonlike besonderhede en POS-regte bly op die bediener.</small>
+          </div>
+          <section className="topup-panel">
+            <strong>Kassierterminaal vir geld-aanvulling</strong>
+            <p className="payment-note">Nie nodig om ’n beursie of NFC-kaart te skep nie. Verbind dit eers wanneer jy kontant of kaartkrediet gaan laai.</p>
+            <label>Kassierligging<select value={locationId} disabled={Boolean(lease)||Boolean(busy)||Boolean(pending)||Boolean(cardPending)||!restored} onChange={e=>setLocationId(Number(e.target.value))}>
+              <option value={0}>Kies ligging</option>{config?.locations?.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+            </select></label>
+            <button className="app-secondary" disabled={!restored||!locationId||Boolean(busy)||Boolean(lease)||Boolean(cardPending)} onClick={()=>void prepare()}>{lease ? 'Kassierterminaal gekoppel' : 'Verbind kassierterminaal'}</button>
+          </section>
+          {lease&&config?.event?.id&&<POSShiftPanel userId={userId} context={{terminal_code:lease.terminal_code,location_id:locationId,event_id:config.event.id}} lease={lease} disabled={Boolean(busy)||Boolean(pending)||Boolean(cardPending)} onReady={setShiftReady}/>}
           <div className="amount-options">
             {[5000, 10000, 20000, 30000].map((value) => <button type="button" key={value} className={amount === value ? "active" : ""} onClick={() => setAmount(value)}>R {value / 100}</button>)}
           </div>
