@@ -61,6 +61,7 @@ test("app deep links map to the intended grouped workflow pages", async () => {
   assert.match(source, /new URLSearchParams\(search\)\.get\("module"\)/);
   assert.match(source, /appModules\.some\(\(item\) => item\.key === moduleKey\) \? moduleKey : null/);
   assert.match(source, /canOpenModule\(selected\)/);
+  assert.doesNotMatch(source, /return "\/pos-test\?module=pos"/);
 });
 
 test("app module permissions and native review labels stay aligned", async () => {

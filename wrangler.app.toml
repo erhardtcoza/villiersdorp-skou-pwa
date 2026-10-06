@@ -27,9 +27,3 @@ WALLET_BACKEND_ORIGIN = "https://tickets.villiersdorpskou.co.za"
 
 [observability.logs]
 enabled = true
-
-# Only /pos-test/api is routed to this isolated POS acceptance backend. Normal
-# app routes continue to use tickets.villiersdorpskou.co.za.
-[[services]]
-binding = "POS_TEST_BACKEND"
-service = "skou-events-staging"

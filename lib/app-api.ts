@@ -1,12 +1,10 @@
 // Shared browser API deadline covers both headers and JSON body consumption.
 // A timeout is an unknown write outcome, not proof that a financial action failed.
 //
-// The production app has one deliberately isolated POS acceptance route.  Its
-// API prefix is interpreted only by the PWA worker and never changes the
-// normal production API origin.
-export function appApiPath(path: string, pathname = typeof window === "undefined" ? "" : window.location.pathname) {
-  if (!path.startsWith("/api/")) return path;
-  return pathname === "/pos-test" || pathname.startsWith("/pos-test/") ? `/pos-test${path}` : path;
+// The production app always talks to the canonical live backend. The retired
+// /pos-test URL redirects to /pos before the client can make an API request.
+export function appApiPath(path: string, _pathname = typeof window === "undefined" ? "" : window.location.pathname) {
+  return path;
 }
 
 export async function api(path: string, init?: RequestInit, timeoutMs = 20000) {

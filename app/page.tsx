@@ -1937,7 +1937,6 @@ function moduleFromBrowserQuery(search: string) {
 }
 
 function pagePath(page: AppPage) {
-  if (typeof window !== "undefined" && (window.location.pathname === "/pos-test" || window.location.pathname.startsWith("/pos-test/"))) return "/pos-test?module=pos";
   if (page === "tickets") return "/kaartjies";
   if (page === "venues") return "/terreinbesprekings";
   if (page === "bar") return "/kroeg";
@@ -3648,6 +3647,11 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
       await load();
     } catch (err) {
       setReview(null);
+      // A network failure after a write is an unknown outcome. Do not expose
+      // another approval, email or deposit action until canonical state has
+      // been loaded again.
+      setCanApprove(false);
+      setCanManageFinance(false);
       setReviewNotice(err instanceof Error ? err.message : "Die uitslag kon nie bevestig word nie. Herlaai die aansoeke om die huidige status te sien voordat jy weer probeer.");
     } finally {
       reviewInFlight.current = false;
