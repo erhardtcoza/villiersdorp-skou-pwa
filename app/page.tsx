@@ -2497,9 +2497,9 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
       <p className="eyebrow">POS & toegang</p>
       <h2>{moduleInfo?.title || "Kies POS-afdeling"}</h2>
       <p className="module-availability" data-status={moduleInfo?.status || "admin"}>
-        Mobiele launch-pad vir personeel se verkoop- en toegangskerms.
+        Kies ’n regstreekse POS- of toegangswerkvloei binne die app.
       </p>
-      <p>Die PWA wys net POS-afdelings wat reeds in die backend opgestel is. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
+      <p>Die app wys net POS-afdelings wat reeds in die backend opgestel is. Sessies, betalings, voorraad en cash-up word veilig deur dieselfde live backend verwerk.</p>
       {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-afdelings…</p>}
       {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Die veilige standaard-skakels bly beskikbaar.</p>}
       {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}
