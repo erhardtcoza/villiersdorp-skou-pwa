@@ -3611,7 +3611,7 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
       <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
       <p className="eyebrow">Perde</p>
       <h2>Verwerk perde-aansoeke</h2>
-      <p className="request-intro">Hierdie lys wys die bestaande skou se perde-aansoeke. Gemagtigde personeel kan nuwe aansoeke goedkeur of afkeur. Fakture, klasse en deposito-aksies binne die app kom binnekort; kontak admin vir hulp daarmee.</p>
+      <p className="request-intro">Hierdie lys wys die aktiewe skou se perde-aansoeke en hul gekoppelde uitstallers- en faktuurstatus. Gemagtigde personeel kan nuwe aansoeke hier goedkeur of afkeur. Faktuur- en deposito-inligting is leesbaar op elke rekord sodat die goedkeuringsproses en finansiële opvolg op dieselfde skerm nagegaan kan word.</p>
       {eventName && <p className="provider-note">Gekoppel aan: {eventName}</p>}
       {typeof settings.is_open !== "undefined" && (
         <p className="provider-note">Aansoeke is tans {Number(settings.is_open) ? "oop" : "gesluit"}{settings.closing_date ? ` · sluit ${String(settings.closing_date)}` : ""}</p>
@@ -3655,8 +3655,9 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
                   <strong>Faktuur</strong>
                   <ul>
                     <li>{application.invoice_no || "Nog geen faktuur gekoppel nie"}</li>
-                    <li>Status: {application.invoice_status || "—"}</li>
+                    <li>Status: {application.invoice_status || "Nog nie uitgereik nie"}</li>
                     <li>Totaal: R{(application.total_cents / 100).toFixed(2)}</li>
+                    <li>Nommerdeposito: {application.invoice_id ? `R${(application.number_deposit_cents / 100).toFixed(2)} · ${application.deposit_refunded_at ? "terugbetaal" : "nog uitstaande"}` : "Geen deposito van toepassing nie"}</li>
                   </ul>
                 </section>
                 <section>
@@ -3665,6 +3666,7 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
                     <li>Lid bevestig: {application.membership_agreed ? "Ja" : "Nee"}</li>
                     <li>Portal: {application.portal_status || "—"}</li>
                     <li>Goedkeuring e-pos: {application.approval_email_sent_at ? "gestuur" : "nog nie"}</li>
+                    <li>Goedkeuring WhatsApp: {application.approval_whatsapp_sent_at ? "gestuur" : "nog nie"}</li>
                   </ul>
                 </section>
               </div>
