@@ -135,6 +135,14 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /moduleKey === "bar-pos"\) return option\.key === "bar-pos";/);
   assert.match(source, /moduleKey === "gates"\) return option\.key === "gate-scanner";/);
   assert.match(source, /moduleKey === "pos"\) return option\.key === "gate-pos";/);
+  assert.match(source, /key:\s*"pos"[\s\S]*?status:\s*"live"/);
+  assert.match(source, /key:\s*"bar-pos"[\s\S]*?status:\s*"live"/);
+  assert.match(source, /key:\s*"gates"[\s\S]*?status:\s*"live"/);
+  const appGroupsSource = source.slice(source.indexOf("const appModuleGroups:"), source.indexOf("const modulePanels:"));
+  const posAccessStart = appGroupsSource.indexOf('key: "pos-access"');
+  const posAccessGroup = appGroupsSource.slice(posAccessStart, appGroupsSource.indexOf('key: "horses"', posAccessStart));
+  assert.doesNotMatch(posAccessGroup, /"kitchen-pos"/);
+  assert.doesNotMatch(posAccessGroup, /"reports"/);
   const launcherSource = source.slice(source.indexOf("const optionMatchesModule"), source.indexOf("const scopedLiveOptions"));
   assert.doesNotMatch(launcherSource, /option\.key === "wallet-topup"/);
   assert.doesNotMatch(launcherSource, /option\.key === "gate-scanner"[^;]*\|\|/);

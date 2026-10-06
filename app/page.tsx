@@ -611,12 +611,12 @@ const appModules: AppModule[] = [
   {
     key: "pos",
     title: "Hek POS",
-    detail: "Hekkaartjies, verkope en dagafsluiting",
+    detail: "Hekkaartjies, verkope en dagafsluiting binne die app",
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["pos_sales"],
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "bar-transactions",
@@ -641,12 +641,12 @@ const appModules: AppModule[] = [
   {
     key: "bar-pos",
     title: "Kroeg POS",
-    detail: "Kroegverkope, Yoco en beursiebetalings",
+    detail: "Kroegverkope, Yoco en beursiebetalings binne die app",
     icon: Store,
     roles: ["staff", "committee"],
     permissions: ["bar_pos"],
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "kitchen-pos",
@@ -777,12 +777,12 @@ const appModules: AppModule[] = [
   {
     key: "gates",
     title: "Hekbeheer",
-    detail: "Skandeer kaartjies en monitor toegang",
+    detail: "Skandeer kaartjies en monitor toegang binne die app",
     icon: ScanLine,
     roles: ["staff", "committee"],
     permissions: ["gates_scan"],
     live: true,
-    status: "admin",
+    status: "live",
   },
   {
     key: "reports",
@@ -818,10 +818,10 @@ const appModuleGroups: AppModuleGroup[] = [
   {
     key: "pos-access",
     title: "POS & Toegang",
-    detail: "Hek, kroeg, kombuis en scan workflows vir personeel.",
+    detail: "Hek, kroeg, beursie en scan workflows vir personeel.",
     icon: ScanLine,
     roles: ["staff", "committee"],
-    modules: ["pos", "bar-pos", "wallet-topup", "kitchen-pos", "gates", "bar-transactions", "reports"],
+    modules: ["pos", "bar-pos", "wallet-topup", "gates", "bar-transactions"],
   },
   {
     key: "horses",
@@ -915,9 +915,9 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     next: ["Koppel passes aan vendor/perde/staff records", "Maak QR/NFC compatible", "Laat hek scanner dit valideer"],
   },
   pos: {
-    status: "Hek POS gebruik tans POS V1 as die betroubare verkoopskerm vir hekkaartjies, terminal leases, Yoco/manual betalings en beursie-guards.",
-    ready: ["Open live Hek POS", "Terminal lease en wallet guard bly op backend", "POS/scan toegang word deur server sessie beheer"],
-    next: ["Maak Hek POS app-native", "Finaliseer Yoco terminal/live refund flow", "Voltooi real-device tablet testing"],
+    status: "Hek POS werk binne die app met die bestaande POS V1 backend vir hekkaartjies, terminal leases, betalings en beursie-guards.",
+    ready: ["Open live Hek POS in die app", "Terminal lease en wallet guard bly op backend", "POS/scan toegang word deur server sessie beheer"],
+    next: ["Finaliseer Yoco terminal/live refund flow", "Voltooi real-device tablet testing"],
     action: "Maak Hek POS oop",
   },
   "kitchen-pos": {
@@ -927,9 +927,9 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     action: "Maak Kombuis POS oop",
   },
   "bar-pos": {
-    status: "Kroeg POS launch tans na die bestaande POS V1 skerm. Die kassier kies/gebruik die kroeg afdeling daar totdat die app-native POS klaar is.",
-    ready: ["Open live POS vir kroegverkope", "Yoco/manual/wallet betalings bly server-side", "Kroeg transaksies en refunds het ’n aparte app skerm"],
-    next: ["Launch direk in Main Bar/Kroeg konteks", "Maak produkfilters app-native", "Koppel real Yoco refunds"],
+    status: "Kroeg POS werk binne die app met die bestaande POS V1 backend en Main Bar-konteks.",
+    ready: ["Open live Kroeg POS in die app", "Yoco/manual/wallet betalings bly server-side", "Kroeg transaksies en refunds het ’n aparte app skerm"],
+    next: ["Maak produkfilters app-native", "Koppel real Yoco refunds"],
     action: "Maak Kroeg POS oop",
   },
   "wallet-topup": {
@@ -1000,9 +1000,9 @@ const modulePanels: Record<string, { status: string; ready: string[]; next: stri
     next: ["Koppel agendas/notules aan R2 of DB", "RSVP/reminder flow", "Dokument upload/download"],
   },
   gates: {
-    status: "Die live scanner bly tans die betroubare skerm vir hekbeheer. Die app wys ’n launch-pad vir users met gate access.",
-    ready: ["Open live scanner", "Server vereis staff session", "Scan in/out bly geaudit"],
-    next: ["Maak scanner app-native", "Offline queue", "Finaliseer NFC/QR saamwerk"],
+    status: "Die live hek-skandeerder werk binne die app vir users met gate access.",
+    ready: ["Open live scanner in die app", "Server vereis staff session", "Scan in/out bly geaudit"],
+    next: ["Offline queue", "Finaliseer NFC/QR saamwerk"],
     action: "Maak scanner oop",
   },
   reports: {
