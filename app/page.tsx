@@ -2471,7 +2471,10 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
   const scopedLiveOptions = liveOptions.filter(optionMatchesModule);
   const scopedFallbackOptions = posLaunchOptions.filter(optionMatchesModule);
   const liveKeys = new Set(scopedLiveOptions.map((option) => option.key));
-  const fallbackAdditions = config ? [] : scopedFallbackOptions.filter((option) => option.status === "live" && !liveKeys.has(option.key));
+  // Departments with an area are supplied by the live backend. The scanner and
+  // wallet actions are app-native, permission-gated workflows, so retain those
+  // live static actions without reviving an unconfigured department.
+  const fallbackAdditions = scopedFallbackOptions.filter((option) => !option.area && option.status === "live" && !liveKeys.has(option.key));
   const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...fallbackAdditions] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
   if (showWalletTopup) return <PosWalletTopupPanel key={userId} userId={userId} onBack={() => setShowWalletTopup(false)} />;
   if(showCashup)return <POSCashupPanel key={userId} userId={userId} onBack={()=>setShowCashup(false)}/>;

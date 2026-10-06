@@ -124,7 +124,6 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(fallbackKitchenOption, /status:\s*"coming"/);
   assert.doesNotMatch(fallbackKitchenOption, /href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
   assert.match(source, /\(config\?\.departments \|\| \[\]\)\.filter\(\(department\) => department\.status === "live"\)/);
-  assert.match(source, /const fallbackAdditions = config \? \[\] : scopedFallbackOptions\.filter\(\(option\) => option\.status === "live"/);
   for (const key of ["applications", "horse-processing", "venue-approvals", "rental-approvals"]) {
     const moduleBlock = source.match(new RegExp(`key:\\s*"${key}"[\\s\\S]*?status:\\s*"([^"]+)"`));
     assert.equal(moduleBlock?.[1], "live", `${key} should be marked as an app-native live workflow`);
@@ -132,7 +131,7 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /const staffReviewScopes:[\s\S]*"horse-processing"[\s\S]*"venue-approvals"[\s\S]*"rental-approvals"[\s\S]*applications/);
   assert.match(source, /api\("\/api\/app\/staff\/horse-applications\?limit=50"\)/);
   assert.match(source, /moduleKey === "horse-processing" && staffReview[\s\S]*<HorseApplicationsPanel/);
-  assert.match(source, /const fallbackAdditions = config \? \[\] : scopedFallbackOptions\.filter/);
+  assert.match(source, /const fallbackAdditions = scopedFallbackOptions\.filter\(\(option\) => !option\.area && option\.status === "live"/);
   assert.match(source, /moduleKey === "bar-pos"\) return option\.key === "bar-pos";/);
   assert.match(source, /moduleKey === "gates"\) return option\.key === "gate-scanner";/);
   assert.match(source, /moduleKey === "pos"\) return option\.key === "gate-pos";/);
