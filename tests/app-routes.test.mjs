@@ -123,7 +123,8 @@ test("app module permissions and native review labels stay aligned", async () =>
   const fallbackKitchenOption = fallbackPosOptions.slice(fallbackPosOptions.indexOf('key: "kitchen-pos"'), fallbackPosOptions.indexOf('key: "gate-scanner"'));
   assert.match(fallbackKitchenOption, /status:\s*"coming"/);
   assert.doesNotMatch(fallbackKitchenOption, /href:\s*"https:\/\/tickets\.villiersdorpskou\.co\.za\/app\?pos_area=kombuis"/);
-  assert.doesNotMatch(fallbackKitchenOption, /status:\s*"live"/);
+  assert.match(source, /\(config\?\.departments \|\| \[\]\)\.filter\(\(department\) => department\.status === "live"\)/);
+  assert.match(source, /const fallbackAdditions = config \? \[\] : scopedFallbackOptions\.filter\(\(option\) => option\.status === "live"/);
   for (const key of ["applications", "horse-processing", "venue-approvals", "rental-approvals"]) {
     const moduleBlock = source.match(new RegExp(`key:\\s*"${key}"[\\s\\S]*?status:\\s*"([^"]+)"`));
     assert.equal(moduleBlock?.[1], "live", `${key} should be marked as an app-native live workflow`);
@@ -131,7 +132,7 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /const staffReviewScopes:[\s\S]*"horse-processing"[\s\S]*"venue-approvals"[\s\S]*"rental-approvals"[\s\S]*applications/);
   assert.match(source, /api\("\/api\/app\/staff\/horse-applications\?limit=50"\)/);
   assert.match(source, /moduleKey === "horse-processing" && staffReview[\s\S]*<HorseApplicationsPanel/);
-  assert.match(source, /fallbackAdditions = scopedFallbackOptions\.filter/);
+  assert.match(source, /const fallbackAdditions = config \? \[\] : scopedFallbackOptions\.filter/);
   assert.match(source, /moduleKey === "bar-pos"\) return option\.key === "bar-pos";/);
   assert.match(source, /moduleKey === "gates"\) return option\.key === "gate-scanner";/);
   assert.match(source, /moduleKey === "pos"\) return option\.key === "gate-pos";/);
@@ -139,7 +140,7 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.doesNotMatch(launcherSource, /option\.key === "wallet-topup"/);
   assert.doesNotMatch(launcherSource, /option\.key === "gate-scanner"[^;]*\|\|/);
   assert.match(source, /page === "pos"[\s\S]*title="Kies POS-afdeling"[\s\S]*<PosLauncherPanel userId=\{user.id\} moduleKey="pos-menu" ModuleIcon=\{ScanLine\} \/>/);
-  assert.match(source, /kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling/);
+  assert.match(source, /wys net POS-afdelings wat reeds in die backend opgestel is/);
   const appModuleSource = source.slice(source.indexOf("const appModules:"), source.indexOf("const appModuleGroups:"));
   assert.doesNotMatch(appModuleSource, /https:\/\/www\.villiersdorpskou\.co\.za/);
   assert.doesNotMatch(appModuleSource, /https:\/\/tickets\.villiersdorpskou\.co\.za\/(?:app|scan)/);

@@ -2449,7 +2449,7 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
       active = false;
     };
   }, []);
-  const liveOptions: PosLaunchOption[] = (config?.departments || []).map((department) => ({
+  const liveOptions: PosLaunchOption[] = (config?.departments || []).filter((department) => department.status === "live").map((department) => ({
     key: department.area === "hek" ? "gate-pos" : department.area === "kroeg" ? "bar-pos" : department.area === "kombuis" ? "kitchen-pos" : `${department.area}-pos`,
     title: department.title,
     detail: department.detail,
@@ -2471,7 +2471,7 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
   const scopedLiveOptions = liveOptions.filter(optionMatchesModule);
   const scopedFallbackOptions = posLaunchOptions.filter(optionMatchesModule);
   const liveKeys = new Set(scopedLiveOptions.map((option) => option.key));
-  const fallbackAdditions = scopedFallbackOptions.filter((option) => !liveKeys.has(option.key));
+  const fallbackAdditions = config ? [] : scopedFallbackOptions.filter((option) => option.status === "live" && !liveKeys.has(option.key));
   const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...fallbackAdditions] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
   if (showWalletTopup) return <PosWalletTopupPanel key={userId} userId={userId} onBack={() => setShowWalletTopup(false)} />;
   if(showCashup)return <POSCashupPanel key={userId} userId={userId} onBack={()=>setShowCashup(false)}/>;
@@ -2496,7 +2496,7 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
       <p className="module-availability" data-status={moduleInfo?.status || "admin"}>
         Mobiele launch-pad vir personeel se verkoop- en toegangskerms.
       </p>
-      <p>Die PWA hou die menu skoon: kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling wat in die backend opgestel word. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
+      <p>Die PWA wys net POS-afdelings wat reeds in die backend opgestel is. Die bestaande POS backend bly die bron van waarheid vir sessies, betalings, voorraad en cash-up.</p>
       {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-afdelings…</p>}
       {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Die veilige standaard-skakels bly beskikbaar.</p>}
       {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}
@@ -2539,7 +2539,7 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
       </div>
       <div className="handoff">
         <strong>Backend-koppeling</strong>
-        <p>Hek en Kroeg gebruik reeds dieselfde POS V1 backend. Kombuis word eers live wanneer die Kombuis group/location/products in admin geskep en getoets is.</p>
+        <p>Elke kaart hier gebruik dieselfde POS V1 backend vir sessies, betalings, voorraad en cash-up.</p>
       </div>
     </>
   );
