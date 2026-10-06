@@ -2401,6 +2401,8 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
           <PosWalletTopupPanel key={user.id} userId={user.id} />
         ) : moduleKey === "finance" ? (
           <FinancePanel />
+        ) : moduleKey === "reports" ? (
+          <OperationsPanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : moduleKey === "membership" ? (
           <MembershipPanel user={user} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : moduleKey === "vendor-profile" ? (
@@ -3504,6 +3506,44 @@ function VendorProfilePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule
       <button className="sheet-primary" disabled={busy}>{busy ? <RefreshCw className="spin" /> : <CheckCircle2 />}{busy ? "Stoor…" : "Stoor profiel"}</button>
       <button type="button" className="sheet-secondary" disabled={busy} onClick={() => void load()}><RefreshCw /> Herlaai rekord</button>
     </form>}
+  </>;
+}
+
+function OperationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+  const [health, setHealth] = useState<{ checked_at?: string; event?: { name?: string; status?: string } | null; checks?: Record<string, { status?: string; detail?: string }> } | null>(null);
+  const [config, setConfig] = useState<AppPosConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      const [healthResult, configResult] = await Promise.all([
+        api("/api/app/health"),
+        api("/api/app/pos/config").catch(() => null),
+      ]);
+      setHealth(healthResult);
+      setConfig(configResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Operasionele status kon nie gelaai word nie");
+    } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const checks = Object.entries(health?.checks || {});
+  const liveDepartments = (config?.departments || []).filter((department) => department.status === "live");
+  return <>
+    <span className="detail-icon">{ModuleIcon && <ModuleIcon />}</span>
+    <p className="eyebrow">Operasies</p>
+    <h2>Live stelselstatus</h2>
+    <p className="request-intro">Hierdie skerm lees die huidige app- en POS-status direk vanaf die live backend. Dit verander geen konfigurasie, skofte of finansiële rekords nie.</p>
+    {health?.event && <p className="provider-note">Aktiewe skou: {health.event.name || "—"}{health.event.status ? ` · ${health.event.status}` : ""}</p>}
+    {health?.checked_at && <p className="provider-note">Laaste kontrole: {new Date(health.checked_at).toLocaleString("af-ZA")}</p>}
+    {loading ? <p className="loading-line"><RefreshCw className="spin" /> Laai live status…</p> : error ? <p className="form-error">{error}</p> : <>
+      <section className="staff-review-list">
+        {checks.map(([key, check]) => <article key={key} className="staff-review-card"><div className="staff-review-head"><strong>{key.replace(/_/g, " ")}</strong><span data-status={check.status || "unknown"}>{check.status === "ok" ? "REG" : check.status === "warn" ? "WAARSKUWING" : "FOUT"}</span></div><p>{check.detail || "Geen detail beskikbaar nie."}</p></article>)}
+      </section>
+      <section className="module-status-grid"><section><strong>POS-afdelings</strong><ul>{liveDepartments.length ? liveDepartments.map((department) => <li key={department.area}>{department.title}: {department.detail}</li>) : <li>Geen POS-afdeling beskikbaar vir jou regte nie.</li>}</ul></section><section><strong>Veilige gebruik</strong><ul><li>Hierdie skerm is lees-alleen.</li><li>Gebruik Hek POS, Kroeg POS of Hekbeheer vir werklike operasionele werk.</li></ul></section></section>
+    </>}
+    <button className="sheet-secondary" disabled={loading} onClick={() => void load()}><RefreshCw className={loading ? "spin" : ""} /> Herlaai status</button>
   </>;
 }
 
