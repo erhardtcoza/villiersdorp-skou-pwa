@@ -130,6 +130,12 @@ test("app module permissions and native review labels stay aligned", async () =>
   }
   assert.match(source, /const staffReviewScopes:[\s\S]*"horse-processing"[\s\S]*"venue-approvals"[\s\S]*"rental-approvals"[\s\S]*applications/);
   assert.match(source, /api\("\/api\/app\/staff\/horse-applications\?limit=50"\)/);
+  assert.match(source, /can_manage_finance/);
+  assert.match(source, /resend-approval/);
+  assert.match(source, /refund-number-deposit/);
+  assert.match(source, /Stuur uitnodiging weer/);
+  assert.match(source, /Stuur faktuur weer/);
+  assert.match(source, /Merk nommerdeposito terugbetaal/);
   assert.match(source, /moduleKey === "horse-processing" && staffReview[\s\S]*<HorseApplicationsPanel/);
   assert.match(source, /const fallbackAdditions = scopedFallbackOptions\.filter\(\(option\) => !option\.area && option\.status === "live"/);
   assert.match(source, /moduleKey === "bar-pos"\) return option\.key === "bar-pos";/);

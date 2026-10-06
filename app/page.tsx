@@ -3544,7 +3544,8 @@ function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey
 function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
   const [applications, setApplications] = useState<HorseBackendApplication[]>([]);
   const [canApprove, setCanApprove] = useState(false);
-  const [review, setReview] = useState<{application: HorseBackendApplication; action: "approve" | "decline"} | null>(null);
+  const [canManageFinance, setCanManageFinance] = useState(false);
+  const [review, setReview] = useState<{application: HorseBackendApplication; action: "approve" | "decline" | "resend-approval" | "send-invoice" | "refund-number-deposit"; note?: string} | null>(null);
   const [reviewBusy, setReviewBusy] = useState(false);
   const reviewInFlight = useRef(false);
   const [reviewNotice, setReviewNotice] = useState("");
@@ -3556,6 +3557,7 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
   const load = useCallback(async () => {
     setLoading(true);
     setCanApprove(false);
+    setCanManageFinance(false);
     setReview(null);
     setError("");
     setWarning("");
@@ -3563,6 +3565,7 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
       const result = await api("/api/app/staff/horse-applications?limit=50");
       setApplications(result.applications || []);
       setCanApprove(result.can_approve === true);
+      setCanManageFinance(result.can_manage_finance === true);
       setEventName(result.event?.name || "");
       setSettings(result.settings || {});
       setWarning(result.warning || "");
@@ -3579,21 +3582,33 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
     setReviewNotice("");
     const {application,action} = review;
     try {
-      const result = await api(`/api/app/staff/horse-applications/${application.id}/${action}`, {
-        method: "POST", body: JSON.stringify({event_id: application.event_id}),
-      });
+      const invoiceAction = action === "send-invoice" || action === "refund-number-deposit";
+      const targetId = invoiceAction ? application.invoice_id : application.id;
+      if (!targetId) throw new Error("Geen gekoppelde faktuur is beskikbaar vir hierdie aksie nie.");
+      if (action === "refund-number-deposit" && (review.note || "").trim().length < 3) throw new Error("Voeg 'n kort terugbetalingsnota by voordat jy bevestig.");
+      const endpoint = action === "resend-approval"
+        ? `/api/app/staff/horse-applications/${application.id}/resend-approval`
+        : invoiceAction
+          ? `/api/app/staff/horse-invoices/${targetId}/${action === "send-invoice" ? "send" : "refund-number-deposit"}`
+          : `/api/app/staff/horse-applications/${application.id}/${action}`;
+      const result = await api(endpoint, { method: "POST", body: JSON.stringify({event_id: application.event_id, note: review.note?.trim() || undefined}) });
       if (result.ok !== true) throw new Error("Die verwerking kon nie bevestig word nie.");
-      const delivery = result.notifications;
-      const needsDeliveryReview = action === "approve" && (delivery?.needs_review || delivery?.skipped ||
+      const delivery = result.notifications || result.result;
+      const needsDeliveryReview = (action === "approve" || action === "resend-approval") && (delivery?.needs_review || delivery?.skipped ||
         (!delivery?.email?.ok && !delivery?.whatsapp?.ok));
-      setReviewNotice(action === "decline" ? "Aansoek afgekeur." :
-        needsDeliveryReview ? "Aansoek goedgekeur. Kontak admin om die uitnodiging se aflewering na te gaan." : "Aansoek goedgekeur; uitnodiging gestuur.");
+      const messages: Record<string, string> = {
+        decline: "Aansoek afgekeur.",
+        approve: needsDeliveryReview ? "Aansoek goedgekeur. Kontak admin om die uitnodiging se aflewering na te gaan." : "Aansoek goedgekeur; uitnodiging gestuur.",
+        "resend-approval": needsDeliveryReview ? "Uitnodiging is nie volledig bevestig nie; gaan aflewering na." : "Uitnodiging weer gestuur.",
+        "send-invoice": "Perde-faktuur gestuur.",
+        "refund-number-deposit": `Nommerdeposito gemerk as terugbetaal: R${(Number(result.amount_cents || 0) / 100).toFixed(2)}.`,
+      };
+      setReviewNotice(messages[action]);
       setReview(null);
       await load();
-    } catch {
-      setCanApprove(false);
+    } catch (err) {
       setReview(null);
-      setReviewNotice("Die uitslag kon nie bevestig word nie. Herlaai die aansoeke om die huidige status te sien voordat jy weer probeer. Kontak admin indien dit onseker bly.");
+      setReviewNotice(err instanceof Error ? err.message : "Die uitslag kon nie bevestig word nie. Herlaai die aansoeke om die huidige status te sien voordat jy weer probeer.");
     } finally {
       reviewInFlight.current = false;
       setReviewBusy(false);
@@ -3634,18 +3649,25 @@ function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppMo
                 <span data-status={application.status}>{serviceStatusLabel(application.status)}</span>
               </div>
               {application.notes && <p className="staff-review-detail">{application.notes}</p>}
-              {canApprove && application.status === "new" && !application.exhibitor_id && (
+              {(canApprove || canManageFinance) && (
                 <div>
                   {review?.application.id === application.id ? (
                     <section aria-label="Bevestig perde-aksie">
-                      <p>{review.action === "approve" ? "Keur hierdie aansoek goed en stuur die uitstalleruitnodiging?" : "Keur hierdie aansoek af? Dit kanselleer nie bestaande inskrywings of fakture nie."}</p>
+                      <p>{review.action === "approve" ? "Keur hierdie aansoek goed en stuur die uitstalleruitnodiging?" :
+                        review.action === "decline" ? "Keur hierdie aansoek af? Dit kanselleer nie bestaande inskrywings of fakture nie." :
+                        review.action === "resend-approval" ? "Stuur die bestaande uitstalleruitnodiging weer?" :
+                        review.action === "send-invoice" ? `Stuur ${application.invoice_no || "hierdie"} perde-faktuur weer aan die uitstaller?` :
+                        `Bevestig dat nommers terugontvang is en merk die deposito van R${(application.number_deposit_cents / 100).toFixed(2)} as terugbetaal.`}</p>
+                      {review.action === "refund-number-deposit" && <label>Terugbetalingsnota<input autoFocus value={review.note || ""} maxLength={300} onChange={(event) => setReview({...review,note:event.target.value})} placeholder="bv. Nommers terugontvang; EFT op 24 Okt" /></label>}
                       <button className="sheet-primary" disabled={reviewBusy} onClick={() => void submitReview()}>{reviewBusy ? "Besig om te verwerk…" : "Bevestig"}</button>
                       <button className="sheet-secondary" disabled={reviewBusy} onClick={() => setReview(null)}>Terug</button>
                     </section>
                   ) : (
                     <div>
-                      <button className="sheet-primary" disabled={reviewBusy} onClick={() => setReview({application,action:"approve"})}>Keur goed</button>
-                      <button className="sheet-secondary" disabled={reviewBusy} onClick={() => setReview({application,action:"decline"})}>Keur af</button>
+                      {canApprove && application.status === "new" && !application.exhibitor_id && <><button className="sheet-primary" disabled={reviewBusy} onClick={() => setReview({application,action:"approve"})}>Keur goed</button><button className="sheet-secondary" disabled={reviewBusy} onClick={() => setReview({application,action:"decline"})}>Keur af</button></>}
+                      {canApprove && application.exhibitor_id && <button className="sheet-secondary" disabled={reviewBusy} onClick={() => setReview({application,action:"resend-approval"})}>Stuur uitnodiging weer</button>}
+                      {canManageFinance && application.invoice_id && <button className="sheet-secondary" disabled={reviewBusy} onClick={() => setReview({application,action:"send-invoice"})}>Stuur faktuur weer</button>}
+                      {canManageFinance && application.invoice_id && application.invoice_status === "paid" && !application.deposit_refunded_at && application.number_deposit_cents > 0 && <button className="sheet-secondary" disabled={reviewBusy} onClick={() => setReview({application,action:"refund-number-deposit",note:""})}>Merk nommerdeposito terugbetaal</button>}
                     </div>
                   )}
                 </div>
