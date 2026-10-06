@@ -11,7 +11,6 @@ const appShellRoutes = [
   "app/perde/page.tsx",
   "app/horses/page.tsx",
   "app/pos/page.tsx",
-  "app/pos-test/page.tsx",
   "app/terreinbesprekings/page.tsx",
   "app/verhurings/page.tsx",
 ];
@@ -37,6 +36,13 @@ test("app shell subroutes explicitly render the hydrated client app", async () =
     assert.match(source, /return <HomePage \/>;/);
     assert.doesNotMatch(source, /^export \{ default \} from "\.\.\/page";/m);
   }
+});
+
+test("the retired POS test URL redirects to the live POS route", async () => {
+  const source = await readFile(path.join(root, "app/pos-test/page.tsx"), "utf8");
+  assert.match(source, /import \{ redirect \} from "next\/navigation";/);
+  assert.match(source, /redirect\("\/pos"\)/);
+  assert.doesNotMatch(source, /HomePage/);
 });
 
 test("app deep links map to the intended grouped workflow pages", async () => {

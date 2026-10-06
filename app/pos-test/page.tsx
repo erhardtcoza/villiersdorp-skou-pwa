@@ -1,9 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import HomePage from "../page";
-
-// This route is intentionally an app shell, rather than a second POS UI.
-// The Worker routes only its /pos-test/api calls to isolated POS staging.
+// Staff use the live POS at /pos. Keep this old testing URL from selecting a
+// separate staging identity/data store in the live app.
 export default function PosTestPage() {
-  return <HomePage />;
+  redirect("/pos");
 }
