@@ -2460,10 +2460,12 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
     badge: department.badge,
   }));
   const optionMatchesModule = (option: PosLaunchOption) => {
-    if (moduleKey === "bar-pos") return option.key === "bar-pos" || option.key === "wallet-topup";
+    // Each action is exposed once in POS & Toegang. Keep department, wallet and
+    // scanner workflows distinct so a user does not re-enter the same operation.
+    if (moduleKey === "bar-pos") return option.key === "bar-pos";
     if (moduleKey === "kitchen-pos") return option.key === "kitchen-pos";
     if (moduleKey === "gates") return option.key === "gate-scanner";
-    if (moduleKey === "pos") return option.key === "gate-pos" || option.key === "gate-scanner" || option.key === "wallet-topup";
+    if (moduleKey === "pos") return option.key === "gate-pos";
     return true;
   };
   const scopedLiveOptions = liveOptions.filter(optionMatchesModule);

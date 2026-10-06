@@ -126,7 +126,12 @@ test("app module permissions and native review labels stay aligned", async () =>
   assert.match(source, /api\("\/api\/app\/staff\/horse-applications\?limit=50"\)/);
   assert.match(source, /moduleKey === "horse-processing" && staffReview[\s\S]*<HorseApplicationsPanel/);
   assert.match(source, /fallbackAdditions = scopedFallbackOptions\.filter/);
-  assert.match(source, /moduleKey === "pos"[\s\S]*option\.key === "wallet-topup"/);
+  assert.match(source, /moduleKey === "bar-pos"\) return option\.key === "bar-pos";/);
+  assert.match(source, /moduleKey === "gates"\) return option\.key === "gate-scanner";/);
+  assert.match(source, /moduleKey === "pos"\) return option\.key === "gate-pos";/);
+  const launcherSource = source.slice(source.indexOf("const optionMatchesModule"), source.indexOf("const scopedLiveOptions"));
+  assert.doesNotMatch(launcherSource, /option\.key === "wallet-topup"/);
+  assert.doesNotMatch(launcherSource, /option\.key === "gate-scanner"[^;]*\|\|/);
   assert.match(source, /page === "pos"[\s\S]*title="Kies POS-afdeling"[\s\S]*<PosLauncherPanel userId=\{user.id\} moduleKey="pos-menu" ModuleIcon=\{ScanLine\} \/>/);
   assert.match(source, /kies Hek, Kroeg, Kombuis of enige toekomstige POS-afdeling/);
   const appModuleSource = source.slice(source.indexOf("const appModules:"), source.indexOf("const appModuleGroups:"));
