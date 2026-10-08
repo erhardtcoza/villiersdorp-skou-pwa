@@ -3526,7 +3526,7 @@ function OperationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; M
       setError(err instanceof Error ? err.message : "Operasionele status kon nie gelaai word nie");
     } finally { setLoading(false); }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { queueMicrotask(() => void load()); }, [load]);
   const checks = Object.entries(health?.checks || {});
   const liveDepartments = (config?.departments || []).filter((department) => department.status === "live");
   return <>
@@ -4377,7 +4377,7 @@ function PosWalletTopupPanel({ userId, onBack }: { userId:number; onBack?: () =>
   const [message, setMessage] = useState("");
   useEffect(()=>{
     mounted.current=true;
-    setNfcSupported(Boolean(nfcReaderConstructor()));
+    queueMicrotask(()=>{if(mounted.current)setNfcSupported(Boolean(nfcReaderConstructor()))});
     void (async()=>{try{
       const saved=journal.pending();
       const savedCard=cardJournal.pending();
