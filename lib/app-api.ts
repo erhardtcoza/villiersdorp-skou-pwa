@@ -3,7 +3,7 @@
 //
 // The production app always talks to the canonical live backend. The retired
 // /pos-test URL redirects to /pos before the client can make an API request.
-export function appApiPath(path: string, _pathname = typeof window === "undefined" ? "" : window.location.pathname) {
+export function appApiPath(path: string) {
   return path;
 }
 

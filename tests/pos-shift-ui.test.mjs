@@ -10,7 +10,7 @@ const shift={...saleContext,id:'s1',status:'open',operator_id:7,opening_float_ce
 function harness(api){
   const values=new Map(),storage={getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)},journal=shiftOpeningJournal(storage,7,saleContext),stopJournal=shiftStopJournal(storage,7,saleContext);
   const state={busy:false,loaded:true,disabled:false,amount:'10',error:'',ready:false,shift:null,pendingStop:null,stopReason:'Finished selling'};
-  const sandbox={Error,api,userId:7,context:saleContext,body:{...saleContext,device_instance_id:'device',lease_token:'lease'},journal,stopJournal,openingFloatCents,validateOpenShift,validateStoppedShift,
+  const sandbox={Error,api,userId:7,context:saleContext,shiftContext:saleContext,body:{...saleContext,device_instance_id:'device',lease_token:'lease'},useCallback:fn=>fn,journal,stopJournal,openingFloatCents,validateOpenShift,validateStoppedShift,
     generation:{current:1},inFlight:{current:false},onReady:v=>state.ready=v};
   for(const key of ['busy','loaded','disabled','amount','shift','pendingStop','stopReason'])Object.defineProperty(sandbox,key,{get:()=>state[key]});
   for(const key of ['Busy','Error','Loaded','Shift','Pending','Amount','PendingStop','StopReason','StopMessage'])sandbox[`set${key}`]=v=>state[key[0].toLowerCase()+key.slice(1)]=v;

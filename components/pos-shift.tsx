@@ -1,5 +1,5 @@
 "use client";
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {api} from '../lib/app-api';
 import {openingFloatCents,shiftOpeningJournal,shiftStopJournal,validateOpenShift,validateStoppedShift,type POSShift,type ShiftContext,type ShiftLease,type PendingShiftStop} from '../lib/pos-shift';
 
@@ -14,10 +14,12 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
   const [pendingStop,setPendingStop]=useState<PendingShiftStop|null>(null);
   const [stopMessage,setStopMessage]=useState('');
   const generation=useRef(0),inFlight=useRef(false);
-  const journal=useMemo(()=>shiftOpeningJournal({getItem:k=>window.sessionStorage.getItem(k),setItem:(k,v)=>window.sessionStorage.setItem(k,v),removeItem:k=>window.sessionStorage.removeItem(k)},userId,context),[userId,context.terminal_code,context.event_id,context.location_id]);
-  const stopJournal=useMemo(()=>shiftStopJournal({getItem:k=>window.sessionStorage.getItem(k),setItem:(k,v)=>window.sessionStorage.setItem(k,v),removeItem:k=>window.sessionStorage.removeItem(k)},userId,context),[userId,context.terminal_code,context.event_id,context.location_id]);
-  const body={...context,...lease};
-  const refresh=async()=>{
+  const leaseTerminalCode=lease.terminal_code,leaseDeviceInstanceId=lease.device_instance_id,leaseToken=lease.lease_token;
+  const shiftContext=useMemo(()=>({terminal_code:context.terminal_code,location_id:context.location_id,event_id:context.event_id}),[context.terminal_code,context.location_id,context.event_id]);
+  const journal=useMemo(()=>shiftOpeningJournal({getItem:k=>window.sessionStorage.getItem(k),setItem:(k,v)=>window.sessionStorage.setItem(k,v),removeItem:k=>window.sessionStorage.removeItem(k)},userId,shiftContext),[userId,shiftContext]);
+  const stopJournal=useMemo(()=>shiftStopJournal({getItem:k=>window.sessionStorage.getItem(k),setItem:(k,v)=>window.sessionStorage.setItem(k,v),removeItem:k=>window.sessionStorage.removeItem(k)},userId,shiftContext),[userId,shiftContext]);
+  const body=useMemo(()=>({...shiftContext,terminal_code:leaseTerminalCode,device_instance_id:leaseDeviceInstanceId,lease_token:leaseToken}),[shiftContext,leaseTerminalCode,leaseDeviceInstanceId,leaseToken]);
+  const refresh=useCallback(async()=>{
     if(inFlight.current)return;
     inFlight.current=true;
     const requestGeneration=generation.current;
@@ -26,19 +28,19 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
       const savedStop=stopJournal.pending();setPendingStop(savedStop);if(savedStop)setStopReason(savedStop.reason);
       const result=await api('/api/pos-v1/shifts/current',{method:'POST',body:JSON.stringify(body)});
       if(requestGeneration!==generation.current)return;
-      const current=result.shift===null?null:validateOpenShift(result.shift,userId,context);
+      const current=result.shift===null?null:validateOpenShift(result.shift,userId,shiftContext);
       if(current){journal.clear();setPending(false);}
       else {const saved=journal.pending();setPending(Boolean(saved));if(saved)setAmount((saved.opening_float_cents/100).toFixed(2));}
       setShift(current);setLoaded(true);onReady(Boolean(current)&&!savedStop,current);
     }catch(err){if(requestGeneration===generation.current)setError(err instanceof Error?err.message:'Skof kon nie gelaai word nie.');}
     finally{if(requestGeneration===generation.current){inFlight.current=false;setBusy(false);}}
-  };
+  },[body,journal,onReady,shiftContext,stopJournal,userId]);
   useEffect(()=>{
     generation.current++;
     inFlight.current=false;
     const timer=window.setTimeout(()=>void refresh(),0);
     return()=>{window.clearTimeout(timer);generation.current++;onReady(false,null);};
-  },[journal,lease.lease_token,lease.device_instance_id]);
+  },[journal,leaseToken,leaseDeviceInstanceId,onReady,refresh]);
   const open=async()=>{
     if(inFlight.current||busy||disabled||!loaded||pendingStop)return;
     inFlight.current=true;setBusy(true);setError('');onReady(false,null);
@@ -47,7 +49,7 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
       const entry=journal.prepare(openingFloatCents(amount));setPending(true);
       const result=await api('/api/pos-v1/shifts/open',{method:'POST',body:JSON.stringify({...body,...entry})});
       if(requestGeneration!==generation.current)return;
-      const opened=validateOpenShift(result.shift,userId,context);
+      const opened=validateOpenShift(result.shift,userId,shiftContext);
       journal.clear();setPending(false);setShift(opened);onReady(true,opened);
     }catch(err){if(requestGeneration===generation.current)setError(err instanceof Error?err.message:'Skof kon nie oopgemaak word nie.');}
     finally{if(requestGeneration===generation.current){inFlight.current=false;setBusy(false);}}
@@ -62,7 +64,7 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
       setPendingStop(entry);
       const result=await api('/api/pos-v1/shifts/stop',{method:'POST',body:JSON.stringify({...body,...entry})});
       if(requestGeneration!==generation.current)return;
-      const stopped=validateStoppedShift(result.shift,userId,context,entry);
+      const stopped=validateStoppedShift(result.shift,userId,shiftContext,entry);
       stopJournal.clear();setPendingStop(null);setShift(null);setLoaded(false);setStopReason('');setAmount('');
       setStopMessage(stopped.status==='closed'?'Skof gestop en reeds afgesluit.':'Skof gestop. Kontantafsluiting is nog uitstaande. Hangende verkope kan steeds herstel word.');
     }catch(err){if(requestGeneration===generation.current)setError(err instanceof Error?err.message:'Skof kon nie gestop word nie.');}

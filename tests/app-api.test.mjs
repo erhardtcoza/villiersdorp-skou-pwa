@@ -3,9 +3,8 @@ import assert from "node:assert/strict";
 import { api, appApiPath } from "../lib/app-api.ts";
 
 test("live app API paths never select a staging route", () => {
-  assert.equal(appApiPath("/api/app/me", "/pos-test"), "/api/app/me");
-  assert.equal(appApiPath("/api/pos-v1/orders", "/pos-test/"), "/api/pos-v1/orders");
-  assert.equal(appApiPath("/api/app/me", "/"), "/api/app/me");
+  assert.equal(appApiPath("/api/app/me"), "/api/app/me");
+  assert.equal(appApiPath("/api/pos-v1/orders"), "/api/pos-v1/orders");
   assert.equal(appApiPath("/pos/checkout", "/pos-test"), "/pos/checkout");
 });
 

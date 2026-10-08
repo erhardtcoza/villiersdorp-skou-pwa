@@ -133,7 +133,7 @@ const worker = {
           detail: ticketTypes > 0 ? `${ticketTypes} ticket types available.` : "No public ticket types returned.",
         };
         payload.ok = backendOk && publicHealth.ok && publicBody?.ok === true && Number.isSafeInteger(ticketTypes) && ticketTypes > 0;
-      } catch (error) {
+      } catch {
         payload.checks.backend_api = {
           status: "fail",
           detail: "App backend health checks failed or timed out. Please try again shortly.",

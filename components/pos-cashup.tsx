@@ -1,5 +1,5 @@
 "use client";
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {api} from '../lib/app-api';
 import {cashupJournal,countedCashCents,type CashupIntent,type CashupReceipt} from '../lib/pos-cashup';
 type Shift={id:string;terminal_code:string;status:string;opened_at:number};
@@ -12,13 +12,13 @@ export function POSCashupPanel({userId,onBack}:{userId:number;onBack:()=>void}){
   const [cancelReason,setCancelReason]=useState(''),[message,setMessage]=useState('');
   const flight=useRef(false),mounted=useRef(true);
   const journal=useMemo(()=>cashupJournal({getItem:k=>sessionStorage.getItem(k),setItem:(k,v)=>sessionStorage.setItem(k,v),removeItem:k=>sessionStorage.removeItem(k)},userId,api),[userId]);
-  async function action(work:()=>Promise<void>){
+  const action=useCallback(async(work:()=>Promise<void>)=>{
     if(flight.current)return;flight.current=true;setBusy(true);setError('');setMessage('');
     try{await work();}catch(e){if(mounted.current)setError(e instanceof Error?e.message:'Kasafsluiting kon nie gelaai word nie.');}
     finally{flight.current=false;if(mounted.current){setBusy(false);try{setPending(journal.pending());}catch{setError('Gestoorde kasafsluiting kon nie gelees word nie. Kontak admin voordat jy weer afsluit.');}}}
-  }
-  const refresh=()=>action(async()=>{setPending(journal.pending());const data=await api('/api/app/pos/cashups');if(mounted.current)setShifts(data.shifts||[]);});
-  useEffect(()=>{mounted.current=true;void refresh();return()=>{mounted.current=false;};},[journal]);
+  },[journal]);
+  const refresh=useCallback(()=>action(async()=>{setPending(journal.pending());const data=await api('/api/app/pos/cashups');if(mounted.current)setShifts(data.shifts||[]);}),[action,journal]);
+  useEffect(()=>{mounted.current=true;void refresh();return()=>{mounted.current=false;};},[refresh]);
   const select=(id:string)=>action(async()=>{const data=await api(`/api/app/pos/cashups/${encodeURIComponent(id)}`);if(mounted.current){setPreview(data);setReceipt(null);setAmount('');setReason('');}});
   const close=(resume:boolean)=>action(async()=>{
     const s=preview?.snapshot;

@@ -14,7 +14,7 @@ import { POSShiftPanel } from "../components/pos-shift";
 import { POSCashupPanel } from "../components/pos-cashup";
 import { cashierTopupJournal, type CashTopupIntent } from "../lib/cashier-topup";
 import { cashierCardTopupJournal } from "../lib/cashier-card-topup";
-import { validateOpenShift, type ShiftLease } from "../lib/pos-shift";
+import { validateOpenShift, type POSShift, type ShiftLease } from "../lib/pos-shift";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../components/ui/alert-dialog";
 
 type AppUser = {
@@ -2045,19 +2045,6 @@ function SimplePanel({ title, subtitle, children }: { title: string; subtitle: s
     </section>
   );
 }
-function InfoRow({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) {
-  return (
-    <article className="list-row">
-      <span className="module-icon">
-        <Icon />
-      </span>
-      <span>
-        <strong>{title}</strong>
-        <small>{text}</small>
-      </span>
-    </article>
-  );
-}
 function AppSubPage({ eyebrow, title, icon: Icon, onBack, children }: { eyebrow: string; title: string; icon: LucideIcon; onBack: () => void; children: React.ReactNode }) {
   return (
     <section className="app-subpage">
@@ -2401,7 +2388,7 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
         ) : moduleKey === "finance" ? (
           <FinancePanel />
         ) : moduleKey === "reports" ? (
-          <OperationsPanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
+          <OperationsPanel ModuleIcon={ModuleIcon} />
         ) : moduleKey === "membership" ? (
           <MembershipPanel user={user} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
         ) : moduleKey === "vendor-profile" ? (
@@ -2409,7 +2396,7 @@ function ModuleSheet({ moduleKey, user, tickets, pendingOrders, wallets, onRefre
         ) : requestModuleDetails[moduleKey] ? (
           <ServiceRequestFlow moduleKey={moduleKey} user={user} moduleInfo={moduleInfo} config={requestModuleDetails[moduleKey]} />
         ) : moduleKey === "horse-processing" && staffReview ? (
-          <HorseApplicationsPanel moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} />
+          <HorseApplicationsPanel ModuleIcon={ModuleIcon} />
         ) : staffReview ? (
           <StaffRequestReviewPanel moduleKey={moduleKey} moduleInfo={moduleInfo} ModuleIcon={ModuleIcon} config={staffReview} />
         ) : isPosLauncher ? (
@@ -2740,6 +2727,10 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
   const [lease, setLease] = useState<{ terminal_code: string; device_instance_id: string; lease_token: string; expires_at?: number } | null>(null);
   const [shiftReady, setShiftReady] = useState(false);
   const [shiftId, setShiftId] = useState<string | null>(null);
+  const onShiftReady = useCallback((ready: boolean, shift?: POSShift | null) => {
+    setShiftReady(ready);
+    setShiftId(ready ? shift?.id || null : null);
+  }, []);
   const [orderCode, setOrderCode] = useState("");
   const saleInFlight = useRef(false);
   const [hasPendingSale, setHasPendingSale] = useState(false);
@@ -2897,9 +2888,17 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveDepartment.area, effectiveDepartment.primary_location_id, configLoading, locations.length]);
+  const leaseTerminalCode = lease?.terminal_code ?? null;
+  const leaseDeviceInstanceId = lease?.device_instance_id ?? null;
+  const leaseToken = lease?.lease_token ?? null;
+  const heartbeatLease = useMemo(() => leaseTerminalCode && leaseDeviceInstanceId && leaseToken ? {
+    terminal_code: leaseTerminalCode,
+    device_instance_id: leaseDeviceInstanceId,
+    lease_token: leaseToken,
+  } : null, [leaseTerminalCode, leaseDeviceInstanceId, leaseToken]);
   useEffect(() => {
-    if (!lease) return;
-    const held = lease;
+    if (!heartbeatLease) return;
+    const held = heartbeatLease;
     let active = true;
     const heartbeat = async () => {
       try {
@@ -2923,7 +2922,7 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
     };
     const timer = window.setInterval(() => { void heartbeat(); }, 25_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [lease?.terminal_code, lease?.device_instance_id, lease?.lease_token]);
+  }, [heartbeatLease]);
 
   const searchCustomers = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3036,7 +3035,7 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
       {lease && currentLocation && liveConfig?.event?.id && <POSShiftPanel
         key={`${userId}:${liveConfig.event.id}:${currentLocation.id}:${lease.terminal_code}:${lease.lease_token}`}
         userId={userId} context={{terminal_code:lease.terminal_code,location_id:currentLocation.id,event_id:liveConfig.event.id}}
-        lease={lease} disabled={Boolean(busy)} onReady={(ready, shift) => { setShiftReady(ready); setShiftId(ready ? shift?.id || null : null); }}
+        lease={lease} disabled={Boolean(busy)} onReady={onShiftReady}
       />}
       {error && <p className="form-error">{error}</p>}
       {message && <p className="success-note"><CheckCircle2 />{message}</p>}
@@ -3508,7 +3507,7 @@ function VendorProfilePanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule
   </>;
 }
 
-function OperationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+function OperationsPanel({ ModuleIcon }: { ModuleIcon?: LucideIcon }) {
   const [health, setHealth] = useState<{ checked_at?: string; event?: { name?: string; status?: string } | null; checks?: Record<string, { status?: string; detail?: string }> } | null>(null);
   const [config, setConfig] = useState<AppPosConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -3580,7 +3579,7 @@ function ConnectedModulePanel({ moduleKey, moduleInfo, ModuleIcon }: { moduleKey
   );
 }
 
-function HorseApplicationsPanel({ moduleInfo, ModuleIcon }: { moduleInfo?: AppModule; ModuleIcon?: LucideIcon }) {
+function HorseApplicationsPanel({ ModuleIcon }: { ModuleIcon?: LucideIcon }) {
   const [applications, setApplications] = useState<HorseBackendApplication[]>([]);
   const [canApprove, setCanApprove] = useState(false);
   const [canManageFinance, setCanManageFinance] = useState(false);

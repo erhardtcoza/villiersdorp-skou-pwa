@@ -77,7 +77,13 @@ export function createCheckout(storage: Storage, scope: string, api: Api) {
       }
       const saved = journal.draft;
       if (saved.terminal_code !== lease.terminal_code) throw new Error('Hervat hierdie verkoop op die oorspronklike terminal.');
-      const { method, provider_reference, manual_card_confirmed: _manualConfirmation, ...orderDraft } = saved;
+      const { method, provider_reference } = saved;
+      const orderDraft = {
+        event_id: saved.event_id, group_id: saved.group_id, location_id: saved.location_id,
+        terminal_code: saved.terminal_code, shift_id: saved.shift_id, customer_id: saved.customer_id,
+        customer_name: saved.customer_name, customer_mobile: saved.customer_mobile,
+        wallet_id: saved.wallet_id, items: saved.items,
+      };
       const common = { ...lease, event_id: saved.event_id, group_id: saved.group_id, location_id: saved.location_id, terminal_code: saved.terminal_code, shift_id: saved.shift_id };
       const result = await api('/api/pos-v1/orders', { method: 'POST', body: JSON.stringify({ ...orderDraft, ...common, idempotency_key: `${saved.terminal_code}:app-order:${journal.key}` }) });
       const order = result.order;
