@@ -7,7 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/api/"],
     },
-    sitemap: "https://app.villiersdorpskou.co.za/sitemap.xml",
     host: "https://app.villiersdorpskou.co.za",
   };
 }

@@ -181,10 +181,9 @@ const worker = {
     }
 
     const rendered = await handler.fetch(request, env, ctx);
-    if (!isDevelopment) return rendered;
-    const previewHeaders = new Headers(rendered.headers);
-    previewHeaders.set("x-robots-tag", "noindex, nofollow, noarchive");
-    return new Response(rendered.body, { status: rendered.status, statusText: rendered.statusText, headers: previewHeaders });
+    const appHeaders = new Headers(rendered.headers);
+    appHeaders.set("x-robots-tag", "noindex, nofollow, noarchive");
+    return new Response(rendered.body, { status: rendered.status, statusText: rendered.statusText, headers: appHeaders });
   },
 };
 

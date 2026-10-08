@@ -38,6 +38,21 @@ test("app shell subroutes explicitly render the hydrated client app", async () =
   }
 });
 
+test("the app-only domain is noindex and does not publish operational routes in a sitemap", async () => {
+  const [layout, robots, sitemap, workerSource] = await Promise.all([
+    readFile(path.join(root, "app/layout.tsx"), "utf8"),
+    readFile(path.join(root, "app/robots.ts"), "utf8"),
+    readFile(path.join(root, "app/sitemap.ts"), "utf8"),
+    readFile(path.join(root, "worker/index.ts"), "utf8"),
+  ]);
+
+  assert.match(layout, /robots:\{index:false,follow:false,noarchive:true\}/);
+  assert.match(robots, /disallow:\s*\["\/api\/"\]/);
+  assert.doesNotMatch(robots, /sitemap:/);
+  assert.match(sitemap, /return \[\]/);
+  assert.match(workerSource, /appHeaders\.set\("x-robots-tag", "noindex, nofollow, noarchive"\)/);
+});
+
 test("the retired POS test URL redirects to the live POS route", async () => {
   const source = await readFile(path.join(root, "app/pos-test/page.tsx"), "utf8");
   assert.match(source, /import \{ redirect \} from "next\/navigation";/);
