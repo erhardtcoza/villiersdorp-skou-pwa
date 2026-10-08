@@ -2930,7 +2930,8 @@ function InAppPosPanel({ userId, department, config, onBack }: { userId: number;
     setBusy("customers");
     setError("");
     try {
-      const result = await api(`/api/pos-v1/customers/search?q=${encodeURIComponent(customerQuery.trim())}`);
+      if (!currentLocation?.id) throw new Error("Kies eers ’n verkoopsplek om kliënte te soek.");
+      const result = await api(`/api/pos-v1/customers/search?q=${encodeURIComponent(customerQuery.trim())}&location_id=${encodeURIComponent(String(currentLocation.id))}`);
       setCustomers(result.customers || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kliënt/beursie kon nie gesoek word nie");
