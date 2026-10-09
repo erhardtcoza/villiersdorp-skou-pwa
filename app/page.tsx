@@ -9,6 +9,7 @@ import { api, appApiPath } from "../lib/app-api";
 import { createRefundJournal, refundOutcome, type PendingRefund, type RefundDraft } from "../lib/refund-journal";
 import { currentTicketEvent } from "../lib/current-ticket-event";
 import { GateCamera } from "../components/gate-camera";
+import { retainAvailableGateSelection } from "../lib/gate-selection";
 import { PhotoModeration } from "../components/photo-moderation";
 import { POSShiftPanel } from "../components/pos-shift";
 import { POSCashupPanel } from "../components/pos-cashup";
@@ -2591,8 +2592,8 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
       const gatesResult = await api("/api/scan/gates");
       const liveGates: GateOption[] = gatesResult.gates || [];
       setGates(liveGates);
-      setGateId((current) => current || Number(liveGates[0]?.id || 0));
-      setMessage("Scanner is aan die live hek-backend gekoppel.");
+      setGateId((current) => retainAvailableGateSelection(current, liveGates));
+      setMessage(liveGates.length ? "Scanner is aan die live hek-backend gekoppel. Kies die hek waar jy werk." : "Geen hek is tans beskikbaar nie. Kontak die skoukantoor.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scanner kon nie voorberei word nie");
     } finally {
@@ -2666,7 +2667,7 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
         <GateCamera disabled={Boolean(busy)} onCode={(value) => { setCode(value); setMessage("QR gelees. Kies die aksie om hierdie kaartjie te verwerk."); }} />
         <label>Hek
           <select value={gateId} onChange={(event) => setGateId(Number(event.target.value))}>
-            {!gates.length && <option value="0">Geen hekke gelaai nie</option>}
+            <option value={0}>{gates.length ? "Kies eers ’n hek" : "Geen hekke gelaai nie"}</option>
             {gates.map((gate) => <option key={gate.id} value={gate.id}>{gate.name}</option>)}
           </select>
         </label>
