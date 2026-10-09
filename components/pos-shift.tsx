@@ -36,10 +36,11 @@ export function POSShiftPanel({userId,context,lease,disabled,onReady}:{userId:nu
     finally{if(requestGeneration===generation.current){inFlight.current=false;setBusy(false);}}
   },[body,journal,onReady,shiftContext,stopJournal,userId]);
   useEffect(()=>{
+    const generationRef=generation;
     generation.current++;
     inFlight.current=false;
     const timer=window.setTimeout(()=>void refresh(),0);
-    return()=>{window.clearTimeout(timer);generation.current++;onReady(false,null);};
+    return()=>{window.clearTimeout(timer);generationRef.current++;onReady(false,null);};
   },[journal,leaseToken,leaseDeviceInstanceId,onReady,refresh]);
   const open=async()=>{
     if(inFlight.current||busy||disabled||!loaded||pendingStop)return;

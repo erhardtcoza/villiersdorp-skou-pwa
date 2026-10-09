@@ -36,9 +36,9 @@ function camera({ denied = false, disabled = false, qrData = null, deferMedia = 
     useCallback(fn) { cursor++; return fn; },
     useEffect(fn) { cursor++; if (!effects.length) effects.push(fn); },
   };
-  const module = { exports: {} };
+  const testModule = { exports: {} };
   const context = {
-    module, exports: module.exports,
+    module: testModule, exports: testModule.exports,
     require(name) {
       if (name === "react") return react;
       if (name === "jsqr") return { __esModule: true, default: () => qrData ? { data: qrData } : null };
@@ -59,7 +59,7 @@ function camera({ denied = false, disabled = false, qrData = null, deferMedia = 
   };
   vm.runInNewContext(compiled, context);
   const codes = [];
-  const component = module.exports.GateCamera;
+  const component = testModule.exports.GateCamera;
   function nodes(node) {
     if (Array.isArray(node)) return node.flatMap(nodes);
     if (!node || typeof node !== "object") return [];

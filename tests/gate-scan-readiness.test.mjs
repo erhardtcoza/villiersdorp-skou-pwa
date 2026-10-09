@@ -8,9 +8,9 @@ const source = await readFile(new URL("../lib/gate-scan-readiness.ts", import.me
 const compiled = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
-const module = { exports: {} };
-vm.runInNewContext(compiled, { module, exports: module.exports });
-const { canSubmitGateScan } = module.exports;
+const testModule = { exports: {} };
+vm.runInNewContext(compiled, { module: testModule, exports: testModule.exports });
+const { canSubmitGateScan } = testModule.exports;
 
 test("gate actions fail closed while offline or before network status is known", () => {
   for (const online of [false, null]) {

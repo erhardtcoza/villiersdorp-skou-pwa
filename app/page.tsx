@@ -4184,7 +4184,7 @@ function TicketsFlow({ user, tickets, pendingOrders = [], onRefresh, standalone 
               {tickets.map((ticket, index) => (
                 <div className="ticket-swipe-card" key={ticket.id} ref={(node) => { ticketRefs.current[index] = node; }}>
                   <div className="ticket-qr-panel">
-                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(ticket.qr_url)}`} alt={`QR vir ${ticket.ticket_name}`} />
+                    <Image unoptimized width={420} height={420} src={`https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(ticket.qr_url)}`} alt={`QR vir ${ticket.ticket_name}`} />
                   </div>
                   <div className="ticket-viewer-meta">
                     <strong>{ticket.ticket_name}</strong>
@@ -4915,7 +4915,7 @@ function PhotosFlow() {
           <div className="photo-grid">
             {photos.map((photo) => (
               <article key={photo.id}>
-                <img src={photo.file_url} alt={photo.title} loading="lazy" />
+                <Image unoptimized width={600} height={400} src={photo.file_url} alt={photo.title} loading="lazy" />
                 <div>
                   <strong>{photo.title}</strong>
                   {photo.caption && <p>{photo.caption}</p>}

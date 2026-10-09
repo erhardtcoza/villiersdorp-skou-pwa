@@ -8,9 +8,9 @@ const helperSource = await readFile(new URL("../lib/gate-selection.ts", import.m
 const compiled = ts.transpileModule(helperSource, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
-const module = { exports: {} };
-vm.runInNewContext(compiled, { module, exports: module.exports });
-const { retainAvailableGateSelection } = module.exports;
+const testModule = { exports: {} };
+vm.runInNewContext(compiled, { module: testModule, exports: testModule.exports });
+const { retainAvailableGateSelection } = testModule.exports;
 
 test("a loaded gate list never chooses a gate until the operator selects one", () => {
   assert.equal(retainAvailableGateSelection(0, [{ id: 3 }, { id: 8 }]), 0);

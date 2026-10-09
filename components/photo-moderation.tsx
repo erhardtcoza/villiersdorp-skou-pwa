@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Image from "next/image";
 import { api } from "../lib/app-api";
 
 type Photo = { id: number; title: string; caption?: string; uploader_name?: string; file_url: string; status: string };
@@ -28,8 +29,9 @@ export function PhotoModeration({ onChanged }: { onChanged: () => Promise<void> 
     } finally { if (generation.current === token) setLoading(false); }
   }, [filter]);
   useEffect(() => {
+    const generationRef = generation;
     const timer = window.setTimeout(() => void load(), 0);
-    return () => { window.clearTimeout(timer); generation.current++; };
+    return () => { window.clearTimeout(timer); generationRef.current++; };
   }, [load]);
 
   const review = async (event: FormEvent<HTMLFormElement>, photo: Photo) => {
@@ -63,7 +65,7 @@ export function PhotoModeration({ onChanged }: { onChanged: () => Promise<void> 
     {!loading && !error && !photos.length && <p>Geen foto’s met hierdie status vir die aktiewe skou nie.</p>}
     {nextAfter !== null && <button type="button" className="text-button" disabled={busy || loading} onClick={() => void load(nextAfter)}>Volgende foto’s</button>}
     <div className="photo-grid">{photos.map(photo => <article key={`${photo.id}-${photo.status}`}>
-      <img src={photo.file_url} alt={photo.title} loading="lazy" />
+      <Image unoptimized width={600} height={400} src={photo.file_url} alt={photo.title} loading="lazy" />
       <div><strong>{photo.title}</strong><p>{photo.uploader_name}</p>{photo.caption && <p>{photo.caption}</p>}
         <form onSubmit={event => void review(event, photo)}>
           <label>Besluit<select name="status" disabled={busy} defaultValue={photo.status === "approved" ? "rejected" : "approved"}>

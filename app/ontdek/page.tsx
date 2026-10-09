@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import "./ontdek.css";
 
 type EventSummary = { id?: number; slug?: string; name?: string; starts_at?: string; ends_at?: string; venue?: string };
@@ -77,7 +78,7 @@ export default function DiscoverPage() {
           <div className="discover-heading"><p className="discover-label">Skou-afdelings</p><h2 id="discover-sections-title">Beplan jou besoek</h2></div>
           <div className="discover-grid">
             {sections.map((section) => <article className="discover-card" key={section.id || section.title}>
-              {section.image_url && <img src={section.image_url} alt="" loading="lazy" />}
+              {section.image_url && <Image src={section.image_url} alt="" width={1200} height={600} unoptimized loading="lazy" />}
               <h3>{section.title || "Skou-afdeling"}</h3>
               {section.summary && <p>{section.summary}</p>}
               {section.cta_url && <a href={publicSectionUrl(section.cta_url, event?.slug)}>{section.cta_label || "Lees meer"}</a>}
