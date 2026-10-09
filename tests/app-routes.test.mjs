@@ -60,6 +60,12 @@ test("the retired POS test URL redirects to the live POS route", async () => {
   assert.doesNotMatch(source, /HomePage/);
 });
 
+test("the app-host admin entry redirects to the authoritative admin sign-in", async () => {
+  const source = await readFile(path.join(root, "app/admin/page.tsx"), "utf8");
+  assert.match(source, /import \{ redirect \} from "next\/navigation";/);
+  assert.match(source, /redirect\("https:\/\/www\.villiersdorpskou\.co\.za\/admin"\)/);
+});
+
 test("app deep links map to the intended grouped workflow pages", async () => {
   const source = await readFile(path.join(root, "app/page.tsx"), "utf8");
 
