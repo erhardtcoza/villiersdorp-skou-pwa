@@ -16,6 +16,7 @@ import { POSShiftPanel } from "../components/pos-shift";
 import { POSCashupPanel } from "../components/pos-cashup";
 import { cashierTopupJournal, type CashTopupIntent } from "../lib/cashier-topup";
 import { cashierCardTopupJournal } from "../lib/cashier-card-topup";
+import { isPOSModuleAvailable } from "../lib/pos-availability";
 import { validateOpenShift, type POSShift, type ShiftLease } from "../lib/pos-shift";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../components/ui/alert-dialog";
 
@@ -1708,8 +1709,9 @@ function Dashboard({ data, message, health, onRefresh, onLogout }: { data: MeRes
     [selected, setSelected] = useState<string | null>(() => typeof window === "undefined" ? null : moduleFromBrowserQuery(window.location.search)),
     [page, setPage] = useState<AppPage>(() => typeof window === "undefined" ? "home" : pageFromBrowserPath(window.location.pathname));
   const walletTotal = wallets.reduce((sum, w) => sum + w.balance_cents, 0),
-    visible = appModules.filter((item) => item.roles.includes(preview) && hasAnyPermission(user, item.permissions)),
-    allowed = appModules.filter((item) => item.roles.includes(actualView) && hasAnyPermission(user, item.permissions)),
+    posAvailabilityDetail = health?.checks?.pos_config?.detail,
+    visible = appModules.filter((item) => item.roles.includes(preview) && hasAnyPermission(user, item.permissions) && isPOSModuleAvailable(item.key, posAvailabilityDetail)),
+    allowed = appModules.filter((item) => item.roles.includes(actualView) && hasAnyPermission(user, item.permissions) && isPOSModuleAvailable(item.key, posAvailabilityDetail)),
     grouped = appModuleGroups
       .filter((group) => group.roles.includes(preview))
       .map((group) => ({ ...group, items: group.modules.map((key) => visible.find((item) => item.key === key)).filter((item): item is AppModule => Boolean(item)) }))
@@ -2465,7 +2467,7 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
   // wallet actions are app-native, permission-gated workflows, so retain those
   // live static actions without reviving an unconfigured department.
   const fallbackAdditions = scopedFallbackOptions.filter((option) => !option.area && option.status === "live" && !liveKeys.has(option.key));
-  const ordered = [...(scopedLiveOptions.length ? [...scopedLiveOptions, ...fallbackAdditions] : scopedFallbackOptions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
+  const ordered = [...(config ? [...scopedLiveOptions, ...fallbackAdditions] : fallbackAdditions)].sort((a, b) => (a.key === preferred ? -1 : b.key === preferred ? 1 : 0));
   if (showWalletTopup) return <PosWalletTopupPanel key={userId} userId={userId} onBack={() => setShowWalletTopup(false)} />;
   if(showCashup)return <POSCashupPanel key={userId} userId={userId} onBack={()=>setShowCashup(false)}/>;
   if (selectedArea === "scan") return <InAppScannerPanel onBack={() => setSelectedArea(null)} />;
@@ -2491,8 +2493,9 @@ function PosLauncherPanel({ userId, moduleKey, moduleInfo, ModuleIcon }: { userI
       </p>
       <p>Die app wys net POS-afdelings wat reeds in die backend opgestel is. Sessies, betalings, voorraad en cash-up word veilig deur dieselfde live backend verwerk.</p>
       {loading && <p className="loading-line"><RefreshCw className="spin" /> Laai live POS-afdelings…</p>}
-      {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Die veilige standaard-skakels bly beskikbaar.</p>}
+      {error && <p className="provider-note">Live POS-afdelings kon nie gelees word nie: {error}. Geen POS-verkoopsafdeling word as beskikbaar gewys nie; laai weer of kontak ’n administrateur.</p>}
       {config?.event?.name && <p className="provider-note">Gekoppel aan: {config.event.name}</p>}
+      {!loading && config && moduleKey === "bar-pos" && scopedLiveOptions.length === 0 && <p className="provider-note" role="status">Kroeg-POS is vir hierdie skoujaar afgeskakel en kan nie hier oopgemaak word nie.</p>}
       <div className="pos-launch-grid">
         {moduleKey!=="gates"&&<button className="pos-launch-card" type="button" onClick={()=>setShowCashup(true)}><span>SKOF</span><strong>Kasafsluiting</strong><small>Kontroleer jou kasstaat, tel kontant en sluit jou skof af.</small><ArrowRight/></button>}
         {ordered.map((option) => (
