@@ -9,12 +9,14 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React },
 }).outputText;
 
-function camera({ denied = false, disabled = false, qrData = null } = {}) {
+function camera({ denied = false, disabled = false, qrData = null, deferMedia = false } = {}) {
   let cursor = 0, timerId = 0;
   const hooks = [], effects = [], listeners = new Map(), timers = new Map();
   const calls = { getUserMedia: 0, requested: null };
   const track = { stopped: false, stop() { this.stopped = true; } };
   const stream = { getTracks: () => [track] };
+  let resolveMedia;
+  const mediaPromise = new Promise(resolve => { resolveMedia = resolve; });
   const video = { srcObject: null, readyState: qrData ? 2 : 0, videoWidth: qrData ? 640 : 0, videoHeight: qrData ? 480 : 0, play: async () => {} };
   const document = {
     hidden: false,
@@ -47,6 +49,7 @@ function camera({ denied = false, disabled = false, qrData = null } = {}) {
       calls.getUserMedia++;
       calls.requested = constraints;
       if (denied) throw new DOMException("Permission denied", "NotAllowedError");
+      if (deferMedia) return mediaPromise;
       return stream;
     } } },
     document,
@@ -76,7 +79,7 @@ function camera({ denied = false, disabled = false, qrData = null } = {}) {
   const videoRef = nodes(initialTree).find(node => node.type === "video")?.props.ref;
   const cleanups = effects.map(effect => effect());
   const tick = () => new Promise(resolve => setImmediate(resolve));
-  return { button, calls, codes, document, listeners, stream, text, tick, timers, track, video, videoRef, cleanups };
+  return { button, calls, codes, document, listeners, resolveMedia, stream, text, tick, timers, track, video, videoRef, cleanups };
 }
 
 test("gate camera requests the rear-facing camera and stopping releases its stream", async () => {
@@ -107,6 +110,17 @@ test("camera delivers a decoded QR code and stops the camera", async () => {
   c.button("Lees QR met kamera").props.onClick();
   for (let i = 0; i < 10 && c.codes.length === 0; i++) await c.tick();
   assert.deepEqual(c.codes, ["VDS-TICKET-123"]);
+  assert.equal(c.track.stopped, true);
+  assert.equal(c.video.srcObject, null);
+});
+
+test("a stream granted after the user stops the pending camera request is immediately released", async () => {
+  const c = camera({ deferMedia: true });
+  c.button("Lees QR met kamera").props.onClick();
+  assert.equal(c.calls.getUserMedia, 1);
+  c.button("Stop kamera").props.onClick();
+  c.resolveMedia(c.stream);
+  for (let i = 0; i < 10 && !c.track.stopped; i++) await c.tick();
   assert.equal(c.track.stopped, true);
   assert.equal(c.video.srcObject, null);
 });
