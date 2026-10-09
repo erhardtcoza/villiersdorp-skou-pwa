@@ -9,6 +9,7 @@ import { api, appApiPath } from "../lib/app-api";
 import { createRefundJournal, refundOutcome, type PendingRefund, type RefundDraft } from "../lib/refund-journal";
 import { currentTicketEvent } from "../lib/current-ticket-event";
 import { GateCamera } from "../components/gate-camera";
+import { canSubmitGateScan } from "../lib/gate-scan-readiness";
 import { retainAvailableGateSelection } from "../lib/gate-selection";
 import { PhotoModeration } from "../components/photo-moderation";
 import { POSShiftPanel } from "../components/pos-shift";
@@ -2583,6 +2584,7 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [online, setOnline] = useState<boolean | null>(null);
   const deviceId = typeof window === "undefined" ? "APP-SCAN" : getPosDeviceId();
   const loadScanner = useCallback(async () => {
     setBusy("setup");
@@ -2600,6 +2602,18 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
       setBusy("");
     }
   }, []);
+  useEffect(() => {
+    const syncOnline = () => setOnline(navigator.onLine);
+    const handleOnline = () => { syncOnline(); void loadScanner(); };
+    const handleOffline = () => { syncOnline(); setError("Geen netwerkverbinding nie. Die kaartjie kan nie aan die bediener bevestig word nie; moenie toegang verleen totdat die verbinding terug is nie."); };
+    syncOnline();
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [loadScanner]);
   useEffect(() => {
     const timer = window.setTimeout(() => void loadScanner(), 0);
     return () => window.clearTimeout(timer);
@@ -2624,6 +2638,12 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
     event?.preventDefault();
     const value = code.trim();
     if (!value) return;
+    if (!canSubmitGateScan({ online: online === true && navigator.onLine, busy: Boolean(busy), direction, gateId })) {
+      setError(!navigator.onLine || online !== true
+        ? "Geen netwerkverbinding nie. Die kaartjie kan nie aan die bediener bevestig word nie; moenie toegang verleen totdat die verbinding terug is nie."
+        : "Kies eers ’n hek.");
+      return;
+    }
     if (direction !== "check" && !gateId) {
       setError("Kies eers ’n hek.");
       return;
@@ -2660,6 +2680,8 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
       <p className="eyebrow">Hek scan</p>
       <h2>Scan in / uit</h2>
       <p className="request-intro">Hierdie skerm bly binne die app en gebruik dieselfde live ticket scan backend as die bestaande hek-skandeerder.</p>
+      {online === false && <p className="form-error" role="alert"><strong>Offline — skandering is geblokkeer.</strong> ’n QR-lesing bewys nie dat ’n kaartjie geldig of betaal is nie. Moenie toegang gee voordat die netwerk terug is en die bediener die kaartjie bevestig het nie.</p>}
+      {online === true && <p className="provider-note" role="status">Aanlyn: kaartjie- en toegangstatus word direk by die bediener bevestig. Geen skandering word vanlyn aanvaar nie.</p>}
       {busy === "setup" && <p className="loading-line"><RefreshCw className="spin" /> Koppel scanner…</p>}
       {message && <p className="success-note"><CheckCircle2 />{message}</p>}
       {error && <p className="form-error">{error}</p>}
@@ -2679,7 +2701,7 @@ function InAppScannerPanel({ onBack }: { onBack: () => void }) {
         <label>QR / kaartjiekode
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="Scan of plak QR/kode, bv. CVPJ7YS-8-L81Z1Y" autoCapitalize="characters" />
         </label>
-        <button className="app-primary" disabled={busy === "scan" || !code.trim() || (direction !== "check" && !gateId)}>
+        <button className="app-primary" disabled={!canSubmitGateScan({ online: online === true && (typeof navigator === "undefined" || navigator.onLine), busy: Boolean(busy), direction, gateId }) || !code.trim()}>
           {busy === "scan" ? <RefreshCw className="spin" /> : <ScanLine />}
           {busy === "scan" ? "Verwerk…" : direction === "in" ? "Scan in" : direction === "out" ? "Scan uit" : "Kontroleer kaartjie"}
         </button>
